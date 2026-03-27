@@ -128,6 +128,7 @@ message TaskDataWrapper {
   int64 shuffle_merged_local_bytes_read = 49;
   int64 shuffle_remote_reqs_duration = 50;
   int64 shuffle_merged_remote_req_duration = 51;
+  int64 shuffle_read_placeholder = 52;
 }
 
 message ExecutorMetrics {
@@ -651,6 +652,7 @@ message ShuffleReadMetrics {
   int64 records_read = 7;
   int64 remote_reqs_duration = 8;
   ShufflePushReadMetrics shuffle_push_read_metrics = 9;
+  int64 my_placeholder_value = 10;
 }
 
 message ShufflePushReadMetrics {

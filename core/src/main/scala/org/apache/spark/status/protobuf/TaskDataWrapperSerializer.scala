@@ -132,6 +132,7 @@ private[protobuf] class TaskDataWrapperSerializer extends ProtobufSerDe[TaskData
       shuffleMergedLocalBytesRead = binary.getShuffleMergedLocalBytesRead,
       shuffleRemoteReqsDuration = binary.getShuffleRemoteReqsDuration,
       shuffleMergedRemoteReqDuration = binary.getShuffleMergedRemoteReqDuration,
+      shuffleReadPlaceholder = 45L,
       shuffleBytesWritten = binary.getShuffleBytesWritten,
       shuffleWriteTime = binary.getShuffleWriteTime,
       shuffleRecordsWritten = binary.getShuffleRecordsWritten,

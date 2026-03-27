@@ -385,7 +385,8 @@ class ShuffleReadMetrics private[spark](
     val localBytesRead: Long,
     val recordsRead: Long,
     val remoteReqsDuration: Long,
-    val shufflePushReadMetrics: ShufflePushReadMetrics)
+    val shufflePushReadMetrics: ShufflePushReadMetrics,
+    val myPlaceholderValue: Long)
 
 class ShuffleWriteMetrics private[spark](
     val bytesWritten: Long,

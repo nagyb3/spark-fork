@@ -688,7 +688,8 @@ private[protobuf] class StageDataWrapperSerializer extends ProtobufSerDe[StageDa
       binary.getLocalBytesRead,
       binary.getRecordsRead,
       binary.getRemoteReqsDuration,
-      deserializeShufflePushReadMetrics(binary.getShufflePushReadMetrics))
+      deserializeShufflePushReadMetrics(binary.getShufflePushReadMetrics),
+      44L)
   }
 
   private def deserializeShufflePushReadMetrics(

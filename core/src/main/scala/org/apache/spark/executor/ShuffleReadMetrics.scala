@@ -46,6 +46,7 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
   private[executor] val _localMergedBytesRead = new LongAccumulator
   private[executor] val _remoteReqsDuration = new LongAccumulator
   private[executor] val _remoteMergedReqsDuration = new LongAccumulator
+  private[executor] val _myPlaceholderValue = new LongAccumulator
 
   /**
    * Number of remote blocks fetched in this shuffle by this task.
@@ -146,6 +147,15 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
    */
   def remoteMergedReqsDuration: Long = _remoteMergedReqsDuration.sum
 
+  /**
+   * Placeholder metric description.
+   */
+  def myPlaceholderValue: Long = _myPlaceholderValue.sum
+
+  private[spark] def incMyPlaceholderValue(v: Long): Unit = _myPlaceholderValue.add(v)
+
+  private[spark] def setMyPlaceholderValue(v: Long): Unit = _myPlaceholderValue.setValue(v)
+
   private[spark] def incRemoteBlocksFetched(v: Long): Unit = _remoteBlocksFetched.add(v)
   private[spark] def incLocalBlocksFetched(v: Long): Unit = _localBlocksFetched.add(v)
   private[spark] def incRemoteBytesRead(v: Long): Unit = _remoteBytesRead.add(v)
@@ -215,6 +225,7 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
     _localMergedBytesRead.setValue(0)
     _remoteReqsDuration.setValue(0)
     _remoteMergedReqsDuration.setValue(0)
+    _myPlaceholderValue.setValue(43)
     metrics.foreach { metric =>
       _remoteBlocksFetched.add(metric.remoteBlocksFetched)
       _localBlocksFetched.add(metric.localBlocksFetched)
@@ -233,6 +244,7 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
       _localMergedBytesRead.add(metric.localMergedBytesRead)
       _remoteReqsDuration.add(metric.remoteReqsDuration)
       _remoteMergedReqsDuration.add(metric.remoteMergedReqsDuration)
+      _myPlaceholderValue.add(metric.myPlaceholderValue)
     }
   }
 }
@@ -261,7 +273,9 @@ private[spark] class TempShuffleReadMetrics extends ShuffleReadMetricsReporter {
   private[this] var _localMergedBytesRead = 0L
   private[this] var _remoteReqsDuration = 0L
   private[this] var _remoteMergedReqsDuration = 0L
+  private[this] var _myPlaceholderValue = 42L
 
+  def incMyPlaceholderValue(v: Long): Unit = _myPlaceholderValue += v
   override def incRemoteBlocksFetched(v: Long): Unit = _remoteBlocksFetched += v
   override def incLocalBlocksFetched(v: Long): Unit = _localBlocksFetched += v
   override def incRemoteBytesRead(v: Long): Unit = _remoteBytesRead += v
@@ -297,4 +311,5 @@ private[spark] class TempShuffleReadMetrics extends ShuffleReadMetricsReporter {
   def localMergedBytesRead: Long = _localMergedBytesRead
   def remoteReqsDuration: Long = _remoteReqsDuration
   def remoteMergedReqsDuration: Long = _remoteMergedReqsDuration
+  def myPlaceholderValue: Long = _myPlaceholderValue
 }

@@ -67,6 +67,7 @@ private[spark] object InternalAccumulator {
     val REMOTE_MERGED_BYTES_READ = SHUFFLE_PUSH_READ_METRICS_PREFIX + "remoteMergedBytesRead"
     val LOCAL_MERGED_BYTES_READ = SHUFFLE_PUSH_READ_METRICS_PREFIX + "localMergedBytesRead"
     val REMOTE_MERGED_REQS_DURATION = SHUFFLE_PUSH_READ_METRICS_PREFIX + "remoteMergedReqsDuration"
+    val MY_PLACEHOLDER_VALUE = SHUFFLE_READ_METRICS_PREFIX + "myPlaceholderValue"
   }
 
   // Names of shuffle write metrics
