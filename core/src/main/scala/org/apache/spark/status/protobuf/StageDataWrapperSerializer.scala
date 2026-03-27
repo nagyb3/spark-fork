@@ -224,6 +224,7 @@ private[protobuf] class StageDataWrapperSerializer extends ProtobufSerDe[StageDa
       .setRecordsRead(srm.recordsRead)
       .setRemoteReqsDuration(srm.remoteReqsDuration)
       .setShufflePushReadMetrics(serializeShufflePushReadMetrics(srm.shufflePushReadMetrics))
+      .setMyPlaceholderValue(srm.myPlaceholderValue)
       .build()
   }
 
@@ -689,7 +690,7 @@ private[protobuf] class StageDataWrapperSerializer extends ProtobufSerDe[StageDa
       binary.getRecordsRead,
       binary.getRemoteReqsDuration,
       deserializeShufflePushReadMetrics(binary.getShufflePushReadMetrics),
-      44L)
+      binary.getMyPlaceholderValue)
   }
 
   private def deserializeShufflePushReadMetrics(

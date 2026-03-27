@@ -47,6 +47,7 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
   private[executor] val _remoteReqsDuration = new LongAccumulator
   private[executor] val _remoteMergedReqsDuration = new LongAccumulator
   private[executor] val _myPlaceholderValue = new LongAccumulator
+  _myPlaceholderValue.setValue(42)
 
   /**
    * Number of remote blocks fetched in this shuffle by this task.
@@ -225,7 +226,7 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
     _localMergedBytesRead.setValue(0)
     _remoteReqsDuration.setValue(0)
     _remoteMergedReqsDuration.setValue(0)
-    _myPlaceholderValue.setValue(43)
+    _myPlaceholderValue.setValue(42)
     metrics.foreach { metric =>
       _remoteBlocksFetched.add(metric.remoteBlocksFetched)
       _localBlocksFetched.add(metric.localBlocksFetched)

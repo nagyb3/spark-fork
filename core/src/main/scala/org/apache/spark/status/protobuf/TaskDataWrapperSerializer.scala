@@ -65,6 +65,7 @@ private[protobuf] class TaskDataWrapperSerializer extends ProtobufSerDe[TaskData
       .setShuffleMergedLocalBytesRead(input.shuffleMergedLocalBytesRead)
       .setShuffleRemoteReqsDuration(input.shuffleRemoteReqsDuration)
       .setShuffleMergedRemoteReqDuration(input.shuffleMergedRemoteReqDuration)
+      .setShuffleReadPlaceholder(input.shuffleReadPlaceholder)
       .setShuffleBytesWritten(input.shuffleBytesWritten)
       .setShuffleWriteTime(input.shuffleWriteTime)
       .setShuffleRecordsWritten(input.shuffleRecordsWritten)
@@ -132,7 +133,7 @@ private[protobuf] class TaskDataWrapperSerializer extends ProtobufSerDe[TaskData
       shuffleMergedLocalBytesRead = binary.getShuffleMergedLocalBytesRead,
       shuffleRemoteReqsDuration = binary.getShuffleRemoteReqsDuration,
       shuffleMergedRemoteReqDuration = binary.getShuffleMergedRemoteReqDuration,
-      shuffleReadPlaceholder = 45L,
+      shuffleReadPlaceholder = binary.getShuffleReadPlaceholder,
       shuffleBytesWritten = binary.getShuffleBytesWritten,
       shuffleWriteTime = binary.getShuffleWriteTime,
       shuffleRecordsWritten = binary.getShuffleRecordsWritten,
