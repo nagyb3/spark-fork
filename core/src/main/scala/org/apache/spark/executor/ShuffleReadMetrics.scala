@@ -160,12 +160,6 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
     _shuffleSourceBytes.add((sourceTaskId, bytes))
   }
 
-  private[spark] def setShuffleSourceBytes(sourceTaskId: Long, bytes: Long): Unit = {
-    val updated =
-      (shuffleSourceBytes.updated(sourceTaskId, bytes).toSeq).asJava
-    _shuffleSourceBytes.setValue(updated)
-  }
-
   private[spark] def incRemoteBlocksFetched(v: Long): Unit = _remoteBlocksFetched.add(v)
   private[spark] def incLocalBlocksFetched(v: Long): Unit = _localBlocksFetched.add(v)
   private[spark] def incRemoteBytesRead(v: Long): Unit = _remoteBytesRead.add(v)
@@ -285,7 +279,7 @@ private[spark] class TempShuffleReadMetrics extends ShuffleReadMetricsReporter {
   private[this] var _localMergedBytesRead = 0L
   private[this] var _remoteReqsDuration = 0L
   private[this] var _remoteMergedReqsDuration = 0L
-  private[this] var _shuffleSourceBytes: scala.collection.mutable.Map[Long, Long] =
+  private[this] val _shuffleSourceBytes: scala.collection.mutable.Map[Long, Long] =
     scala.collection.mutable.Map.empty[Long, Long].withDefaultValue(0L)
 
   override def incShuffleSourceBytes(sourceTaskId: Long, bytes: Long): Unit = {
