@@ -46,8 +46,8 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
   private[executor] val _localMergedBytesRead = new LongAccumulator
   private[executor] val _remoteReqsDuration = new LongAccumulator
   private[executor] val _remoteMergedReqsDuration = new LongAccumulator
-  private[executor] val _myPlaceholderValue = new LongAccumulator
-  _myPlaceholderValue.setValue(42)
+  private[spark] val _shuffleSourceBytes: scala.collection.mutable.Map[Long, Long] =
+    scala.collection.mutable.Map.empty[Long, Long].withDefaultValue(0L)
 
   /**
    * Number of remote blocks fetched in this shuffle by this task.
@@ -149,13 +149,17 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
   def remoteMergedReqsDuration: Long = _remoteMergedReqsDuration.sum
 
   /**
-   * Placeholder metric description.
+   * Map of source task IDs to bytes shuffled from each source.
    */
-  def myPlaceholderValue: Long = _myPlaceholderValue.sum
+  def shuffleSourceBytes: Map[Long, Long] = _shuffleSourceBytes.toMap
 
-  private[spark] def incMyPlaceholderValue(v: Long): Unit = _myPlaceholderValue.add(v)
+  private[spark] def incShuffleSourceBytes(sourceTaskId: Long, bytes: Long): Unit = {
+    _shuffleSourceBytes(sourceTaskId) = _shuffleSourceBytes.getOrElse(sourceTaskId, 0L) + bytes
+  }
 
-  private[spark] def setMyPlaceholderValue(v: Long): Unit = _myPlaceholderValue.setValue(v)
+  private[spark] def setShuffleSourceBytes(sourceTaskId: Long, bytes: Long): Unit = {
+    _shuffleSourceBytes(sourceTaskId) = bytes
+  }
 
   private[spark] def incRemoteBlocksFetched(v: Long): Unit = _remoteBlocksFetched.add(v)
   private[spark] def incLocalBlocksFetched(v: Long): Unit = _localBlocksFetched.add(v)
@@ -226,7 +230,7 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
     _localMergedBytesRead.setValue(0)
     _remoteReqsDuration.setValue(0)
     _remoteMergedReqsDuration.setValue(0)
-    _myPlaceholderValue.setValue(42)
+    _shuffleSourceBytes.clear()
     metrics.foreach { metric =>
       _remoteBlocksFetched.add(metric.remoteBlocksFetched)
       _localBlocksFetched.add(metric.localBlocksFetched)
@@ -245,7 +249,9 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
       _localMergedBytesRead.add(metric.localMergedBytesRead)
       _remoteReqsDuration.add(metric.remoteReqsDuration)
       _remoteMergedReqsDuration.add(metric.remoteMergedReqsDuration)
-      _myPlaceholderValue.add(metric.myPlaceholderValue)
+      metric.shuffleSourceBytes.foreach { case (taskId, bytes) =>
+        _shuffleSourceBytes(taskId) = _shuffleSourceBytes.getOrElse(taskId, 0L) + bytes
+      }
     }
   }
 }
@@ -274,9 +280,12 @@ private[spark] class TempShuffleReadMetrics extends ShuffleReadMetricsReporter {
   private[this] var _localMergedBytesRead = 0L
   private[this] var _remoteReqsDuration = 0L
   private[this] var _remoteMergedReqsDuration = 0L
-  private[this] var _myPlaceholderValue = 42L
+  private[this] var _shuffleSourceBytes: scala.collection.mutable.Map[Long, Long] =
+    scala.collection.mutable.Map.empty[Long, Long].withDefaultValue(0L)
 
-  def incMyPlaceholderValue(v: Long): Unit = _myPlaceholderValue += v
+  def incShuffleSourceBytes(sourceTaskId: Long, bytes: Long): Unit = {
+    _shuffleSourceBytes(sourceTaskId) = _shuffleSourceBytes.getOrElse(sourceTaskId, 0L) + bytes
+  }
   override def incRemoteBlocksFetched(v: Long): Unit = _remoteBlocksFetched += v
   override def incLocalBlocksFetched(v: Long): Unit = _localBlocksFetched += v
   override def incRemoteBytesRead(v: Long): Unit = _remoteBytesRead += v
@@ -312,5 +321,5 @@ private[spark] class TempShuffleReadMetrics extends ShuffleReadMetricsReporter {
   def localMergedBytesRead: Long = _localMergedBytesRead
   def remoteReqsDuration: Long = _remoteReqsDuration
   def remoteMergedReqsDuration: Long = _remoteMergedReqsDuration
-  def myPlaceholderValue: Long = _myPlaceholderValue
+  def shuffleSourceBytes: Map[Long, Long] = _shuffleSourceBytes.toMap
 }

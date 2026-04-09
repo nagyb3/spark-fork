@@ -17,6 +17,8 @@
 
 package org.apache.spark.status.protobuf
 
+import scala.jdk.CollectionConverters._
+
 import org.apache.spark.status.TaskDataWrapper
 import org.apache.spark.status.protobuf.Utils.{getOptional, getStringField, setStringField}
 import org.apache.spark.util.Utils.weakIntern
@@ -65,7 +67,6 @@ private[protobuf] class TaskDataWrapperSerializer extends ProtobufSerDe[TaskData
       .setShuffleMergedLocalBytesRead(input.shuffleMergedLocalBytesRead)
       .setShuffleRemoteReqsDuration(input.shuffleRemoteReqsDuration)
       .setShuffleMergedRemoteReqDuration(input.shuffleMergedRemoteReqDuration)
-      .setShuffleReadPlaceholder(input.shuffleReadPlaceholder)
       .setShuffleBytesWritten(input.shuffleBytesWritten)
       .setShuffleWriteTime(input.shuffleWriteTime)
       .setShuffleRecordsWritten(input.shuffleRecordsWritten)
@@ -78,6 +79,9 @@ private[protobuf] class TaskDataWrapperSerializer extends ProtobufSerDe[TaskData
     input.errorMessage.foreach(builder.setErrorMessage)
     input.accumulatorUpdates.foreach { update =>
       builder.addAccumulatorUpdates(AccumulableInfoSerializer.serialize(update))
+    }
+    input.shuffleSourceBytes.foreach { case (taskId, bytes) =>
+      builder.putShuffleSourceBytes(taskId, bytes)
     }
     builder.build().toByteArray
   }
@@ -133,7 +137,9 @@ private[protobuf] class TaskDataWrapperSerializer extends ProtobufSerDe[TaskData
       shuffleMergedLocalBytesRead = binary.getShuffleMergedLocalBytesRead,
       shuffleRemoteReqsDuration = binary.getShuffleRemoteReqsDuration,
       shuffleMergedRemoteReqDuration = binary.getShuffleMergedRemoteReqDuration,
-      shuffleReadPlaceholder = binary.getShuffleReadPlaceholder,
+      shuffleSourceBytes = (Map.empty[Long, Long] ++ binary.getShuffleSourceBytesMap.asScala.map {
+        case (k, v) => (k.longValue(), v.longValue())
+      }),
       shuffleBytesWritten = binary.getShuffleBytesWritten,
       shuffleWriteTime = binary.getShuffleWriteTime,
       shuffleRecordsWritten = binary.getShuffleRecordsWritten,

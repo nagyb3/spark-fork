@@ -214,7 +214,7 @@ private[protobuf] class StageDataWrapperSerializer extends ProtobufSerDe[StageDa
 
   private def serializeShuffleReadMetrics(
       srm: ShuffleReadMetrics): StoreTypes.ShuffleReadMetrics = {
-    StoreTypes.ShuffleReadMetrics.newBuilder()
+    val builder = StoreTypes.ShuffleReadMetrics.newBuilder()
       .setRemoteBlocksFetched(srm.remoteBlocksFetched)
       .setLocalBlocksFetched(srm.localBlocksFetched)
       .setFetchWaitTime(srm.fetchWaitTime)
@@ -224,8 +224,10 @@ private[protobuf] class StageDataWrapperSerializer extends ProtobufSerDe[StageDa
       .setRecordsRead(srm.recordsRead)
       .setRemoteReqsDuration(srm.remoteReqsDuration)
       .setShufflePushReadMetrics(serializeShufflePushReadMetrics(srm.shufflePushReadMetrics))
-      .setMyPlaceholderValue(srm.myPlaceholderValue)
-      .build()
+    srm.shuffleSourceBytes.foreach { case (taskId, bytes) =>
+      builder.putShuffleSourceBytes(taskId, bytes)
+    }
+    builder.build()
   }
 
   private def serializeShufflePushReadMetrics(
@@ -690,7 +692,9 @@ private[protobuf] class StageDataWrapperSerializer extends ProtobufSerDe[StageDa
       binary.getRecordsRead,
       binary.getRemoteReqsDuration,
       deserializeShufflePushReadMetrics(binary.getShufflePushReadMetrics),
-      binary.getMyPlaceholderValue)
+      (Map.empty[Long, Long] ++ binary.getShuffleSourceBytesMap.asScala.map {
+        case (k, v) => (k.longValue(), v.longValue())
+      }))
   }
 
   private def deserializeShufflePushReadMetrics(
