@@ -174,7 +174,8 @@ private class LiveTask(
         metrics.shuffleWriteMetrics.bytesWritten,
         metrics.shuffleWriteMetrics.writeTime,
         metrics.shuffleWriteMetrics.recordsWritten,
-        metrics.shuffleReadMetrics.shuffleSourceBytes)
+        metrics.shuffleReadMetrics.shuffleSourceBytes,
+        metrics.shuffleWriteMetrics.shuffleTargetBytes)
 
       this.metrics = newMetrics
 
@@ -262,6 +263,7 @@ private class LiveTask(
       taskMetrics.shuffleWriteMetrics.bytesWritten,
       taskMetrics.shuffleWriteMetrics.writeTime,
       taskMetrics.shuffleWriteMetrics.recordsWritten,
+      taskMetrics.shuffleWriteMetrics.shuffleTargetBytes,
 
       stageId,
       stageAttemptId)
@@ -788,7 +790,8 @@ private[spark] object LiveEntityHelpers {
       shuffleWriteTime: Long,
       shuffleBytesWritten: Long,
       shuffleRecordsWritten: Long,
-      shuffleSourceBytes: Map[Long, Long]): v1.TaskMetrics = {
+      shuffleSourceBytes: Map[Long, Long],
+      shuffleTargetBytes: Map[Long, Long]): v1.TaskMetrics = {
     new v1.TaskMetrics(
       executorDeserializeTime,
       executorDeserializeCpuTime,
@@ -830,7 +833,8 @@ private[spark] object LiveEntityHelpers {
       new v1.ShuffleWriteMetrics(
         shuffleBytesWritten,
         shuffleWriteTime,
-        shuffleRecordsWritten))
+        shuffleRecordsWritten,
+        shuffleTargetBytes))
   }
   // scalastyle:on argcount
 
@@ -839,6 +843,7 @@ private[spark] object LiveEntityHelpers {
       default, default, default, default, default, default, default, default, default,
       default, default, default, default, default, default, default, default, default,
       default, default, default, default, default, default, default, default,
+      Map.empty,
       Map.empty)
   }
 
@@ -907,7 +912,8 @@ private[spark] object LiveEntityHelpers {
       shuffleBytesWritten = updateMetricValue(m.shuffleWriteMetrics.bytesWritten),
       shuffleWriteTime = updateMetricValue(m.shuffleWriteMetrics.writeTime),
       shuffleRecordsWritten = updateMetricValue(m.shuffleWriteMetrics.recordsWritten),
-      shuffleSourceBytes = m.shuffleReadMetrics.shuffleSourceBytes)
+      shuffleSourceBytes = m.shuffleReadMetrics.shuffleSourceBytes,
+      shuffleTargetBytes = m.shuffleWriteMetrics.shuffleTargetBytes)
   }
 
   private def addMetrics(m1: v1.TaskMetrics, m2: v1.TaskMetrics, mult: Int): v1.TaskMetrics = {
@@ -958,7 +964,10 @@ private[spark] object LiveEntityHelpers {
       m1.shuffleWriteMetrics.recordsWritten + m2.shuffleWriteMetrics.recordsWritten * mult,
       m1.shuffleReadMetrics.shuffleSourceBytes ++ m2.shuffleReadMetrics.shuffleSourceBytes
         .map { case (taskId, bytes) => taskId -> (m1.shuffleReadMetrics.shuffleSourceBytes
-          .getOrElse(taskId, 0L) + bytes * mult) })
+          .getOrElse(taskId, 0L) + bytes * mult) },
+      m1.shuffleWriteMetrics.shuffleTargetBytes ++ m2.shuffleWriteMetrics.shuffleTargetBytes
+        .map { case (partitionId, bytes) => partitionId -> (m1.shuffleWriteMetrics
+          .shuffleTargetBytes.getOrElse(partitionId, 0L) + bytes * mult) })
   }
 
 }

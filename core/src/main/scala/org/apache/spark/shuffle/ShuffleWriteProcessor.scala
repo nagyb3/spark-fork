@@ -57,6 +57,8 @@ private[spark] class ShuffleWriteProcessor extends Serializable with Logging {
       writer.write(inputs.asInstanceOf[Iterator[_ <: Product2[Any, Any]]])
       val mapStatus = writer.stop(success = true)
       if (mapStatus.isDefined) {
+        context.taskMetrics().shuffleWriteMetrics
+          .setShuffleTargetBytes(writer.getPartitionLengths())
         // Check if sufficient shuffle mergers are available now for the ShuffleMapTask to push
         if (dep.shuffleMergeAllowed && dep.getMergerLocs.isEmpty) {
           val mapOutputTracker = SparkEnv.get.mapOutputTracker

@@ -247,11 +247,14 @@ private[protobuf] class StageDataWrapperSerializer extends ProtobufSerDe[StageDa
 
   private def serializeShuffleWriteMetrics(
       swm: ShuffleWriteMetrics): StoreTypes.ShuffleWriteMetrics = {
-    StoreTypes.ShuffleWriteMetrics.newBuilder()
+    val builder = StoreTypes.ShuffleWriteMetrics.newBuilder()
       .setBytesWritten(swm.bytesWritten)
       .setWriteTime(swm.writeTime)
       .setRecordsWritten(swm.recordsWritten)
-      .build()
+    swm.shuffleTargetBytes.foreach { case (partitionId, bytes) =>
+      builder.putShuffleTargetBytes(partitionId, bytes)
+    }
+    builder.build()
   }
 
   private def serializeSpeculationStageSummary(
@@ -717,6 +720,9 @@ private[protobuf] class StageDataWrapperSerializer extends ProtobufSerDe[StageDa
     new ShuffleWriteMetrics(
       binary.getBytesWritten,
       binary.getWriteTime,
-      binary.getRecordsWritten)
+      binary.getRecordsWritten,
+      (Map.empty[Long, Long] ++ binary.getShuffleTargetBytesMap.asScala.map {
+        case (k, v) => (k.longValue(), v.longValue())
+      }))
   }
 }

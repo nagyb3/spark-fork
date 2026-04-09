@@ -587,6 +587,20 @@ final class ShuffleBlockFetcherIterator(
         shuffleMetrics.incLocalBlocksFetched(1)
         shuffleMetrics.incLocalBytesRead(buf.size)
         buf.retain()
+        blockId match {
+          case s: ShuffleBlockId =>
+            logInfo(s"DEBUG: Recording shuffle source bytes: mapId=${s.mapId}, bytes=${buf.size}")
+            shuffleMetrics.incShuffleSourceBytes(s.mapId, buf.size)
+          case b: ShuffleBlockBatchId =>
+            logInfo(s"DEBUG: Recording shuffle source bytes: mapId=${b.mapId}, bytes=${buf.size}")
+            shuffleMetrics.incShuffleSourceBytes(b.mapId, buf.size)
+          case c: ShuffleBlockChunkId =>
+            logInfo(s"DEBUG: Recording shuffle source bytes: " +
+              s"shuffleMergeId=${c.shuffleMergeId}, bytes=${buf.size}")
+            shuffleMetrics.incShuffleSourceBytes(c.shuffleMergeId.toLong, buf.size)
+          case other =>
+            logInfo(s"DEBUG: Unknown shuffle block type: ${other.getClass.getName}")
+        }
         results.put(SuccessFetchResult(blockId, mapIndex, blockManager.blockManagerId,
           buf.size(), buf, false))
       } catch {
@@ -775,6 +789,13 @@ final class ShuffleBlockFetcherIterator(
         shuffleMetrics.incLocalBlocksFetched(1)
     }
     shuffleMetrics.incLocalBytesRead(buf.size)
+    blockId match {
+      case s: ShuffleBlockId => shuffleMetrics.incShuffleSourceBytes(s.mapId, buf.size)
+      case b: ShuffleBlockBatchId => shuffleMetrics.incShuffleSourceBytes(b.mapId, buf.size)
+      case c: ShuffleBlockChunkId =>
+        shuffleMetrics.incShuffleSourceBytes(c.shuffleMergeId.toLong, buf.size)
+      case _ =>
+    }
   }
 
   private def shuffleRemoteMetricsUpdate(blockId: BlockId, buf: ManagedBuffer): Unit = {
@@ -791,6 +812,13 @@ final class ShuffleBlockFetcherIterator(
     shuffleMetrics.incRemoteBytesRead(buf.size)
     if (buf.isInstanceOf[FileSegmentManagedBuffer]) {
       shuffleMetrics.incRemoteBytesReadToDisk(buf.size)
+    }
+    blockId match {
+      case s: ShuffleBlockId => shuffleMetrics.incShuffleSourceBytes(s.mapId, buf.size)
+      case b: ShuffleBlockBatchId => shuffleMetrics.incShuffleSourceBytes(b.mapId, buf.size)
+      case c: ShuffleBlockChunkId =>
+        shuffleMetrics.incShuffleSourceBytes(c.shuffleMergeId.toLong, buf.size)
+      case _ =>
     }
   }
 

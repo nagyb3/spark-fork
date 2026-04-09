@@ -129,6 +129,7 @@ message TaskDataWrapper {
   int64 shuffle_remote_reqs_duration = 50;
   int64 shuffle_merged_remote_req_duration = 51;
   map<int64, int64> shuffle_source_bytes = 52;
+  map<int64, int64> shuffle_target_bytes = 53;
 }
 
 message ExecutorMetrics {
@@ -671,6 +672,7 @@ message ShuffleWriteMetrics {
   int64 bytes_written = 1;
   int64 write_time = 2;
   int64 records_written = 3;
+  map<int64, int64> shuffle_target_bytes = 4;
 }
 
 message TaskMetricDistributions {

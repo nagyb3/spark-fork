@@ -17,9 +17,11 @@
 
 package org.apache.spark.executor
 
+import scala.jdk.CollectionConverters._
+
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.shuffle.ShuffleWriteMetricsReporter
-import org.apache.spark.util.LongAccumulator
+import org.apache.spark.util.{CollectionAccumulator, LongAccumulator}
 
 
 /**
@@ -32,6 +34,7 @@ class ShuffleWriteMetrics private[spark] () extends ShuffleWriteMetricsReporter 
   private[executor] val _bytesWritten = new LongAccumulator
   private[executor] val _recordsWritten = new LongAccumulator
   private[executor] val _writeTime = new LongAccumulator
+  private[executor] val _shuffleTargetBytes = new CollectionAccumulator[(Long, Long)]
 
   /**
    * Number of bytes written for the shuffle by this task.
@@ -48,6 +51,13 @@ class ShuffleWriteMetrics private[spark] () extends ShuffleWriteMetricsReporter 
    */
   def writeTime: Long = _writeTime.sum
 
+  /**
+   * Map of target reduce partition IDs to bytes shuffled to each target.
+   */
+  def shuffleTargetBytes: Map[Long, Long] = {
+    _shuffleTargetBytes.value.asScala.groupMapReduce(_._1)(_._2)(_ + _).toMap
+  }
+
   private[spark] override def incBytesWritten(v: Long): Unit = _bytesWritten.add(v)
   private[spark] override def incRecordsWritten(v: Long): Unit = _recordsWritten.add(v)
   private[spark] override def incWriteTime(v: Long): Unit = _writeTime.add(v)
@@ -56,5 +66,19 @@ class ShuffleWriteMetrics private[spark] () extends ShuffleWriteMetricsReporter 
   }
   private[spark] override def decRecordsWritten(v: Long): Unit = {
     _recordsWritten.setValue(recordsWritten - v)
+  }
+
+  private[spark] def setShuffleTargetBytes(partitionLengths: Array[Long]): Unit = {
+    _shuffleTargetBytes.reset()
+    partitionLengths.iterator.zipWithIndex.foreach { case (bytes, partitionId) =>
+      if (bytes > 0L) {
+        _shuffleTargetBytes.add((partitionId.toLong, bytes))
+      }
+    }
+  }
+
+  private[spark] def setShuffleTargetBytes(partitionId: Long, bytes: Long): Unit = {
+    val updated = shuffleTargetBytes.updated(partitionId, bytes).toSeq.asJava
+    _shuffleTargetBytes.setValue(updated)
   }
 }

@@ -282,6 +282,7 @@ private[spark] class TaskDataWrapper(
     val shuffleWriteTime: Long,
     @KVIndexParam(value = TaskIndexNames.SHUFFLE_WRITE_RECORDS, parent = TaskIndexNames.STAGE)
     val shuffleRecordsWritten: Long,
+    val shuffleTargetBytes: Map[Long, Long],
 
     val stageId: Int,
     val stageAttemptId: Int) {
@@ -338,7 +339,8 @@ private[spark] class TaskDataWrapper(
         new ShuffleWriteMetrics(
           getMetricValue(shuffleBytesWritten),
           getMetricValue(shuffleWriteTime),
-          getMetricValue(shuffleRecordsWritten))))
+          getMetricValue(shuffleRecordsWritten),
+          shuffleTargetBytes)))
     } else {
       None
     }
