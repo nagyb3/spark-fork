@@ -75,7 +75,6 @@ private[spark] object InternalAccumulator {
     val BYTES_WRITTEN = SHUFFLE_WRITE_METRICS_PREFIX + "bytesWritten"
     val RECORDS_WRITTEN = SHUFFLE_WRITE_METRICS_PREFIX + "recordsWritten"
     val WRITE_TIME = SHUFFLE_WRITE_METRICS_PREFIX + "writeTime"
-    val SHUFFLE_TARGET_BYTES = SHUFFLE_WRITE_METRICS_PREFIX + "shuffleTargetBytes"
   }
 
   // Names of output metrics

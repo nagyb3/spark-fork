@@ -105,7 +105,6 @@ class LiveEntitySuite extends SparkFunSuite {
       shuffleWriteTime = 33L,
       shuffleRecordsWritten = 34L,
       shuffleSourceBytes = Map(1L -> 35L),
-      shuffleTargetBytes = Map(2L -> 45L)
     )
 
     val negatedMetrics = makeNegative(originalMetrics)
@@ -187,8 +186,6 @@ class LiveEntitySuite extends SparkFunSuite {
     assert(negatedMetrics.shuffleWriteMetrics.bytesWritten === expectedNegated(32L))
     assert(negatedMetrics.shuffleWriteMetrics.writeTime === expectedNegated(33L))
     assert(negatedMetrics.shuffleWriteMetrics.recordsWritten === expectedNegated(34L))
-    assert(negatedMetrics.shuffleWriteMetrics.shuffleTargetBytes === Map(2L -> 45L),
-      "shuffleWriteMetrics.shuffleTargetBytes should remain unchanged (maps are not negated)")
 
     // Verify zero handling: 0 should become -1
     val zeroMetrics = createMetrics(default = 0L)

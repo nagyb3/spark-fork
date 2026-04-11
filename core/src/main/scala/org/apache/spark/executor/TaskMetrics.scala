@@ -268,7 +268,6 @@ class TaskMetrics private[spark] () extends Serializable {
     shuffleWrite.BYTES_WRITTEN -> shuffleWriteMetrics._bytesWritten,
     shuffleWrite.RECORDS_WRITTEN -> shuffleWriteMetrics._recordsWritten,
     shuffleWrite.WRITE_TIME -> shuffleWriteMetrics._writeTime,
-    shuffleWrite.SHUFFLE_TARGET_BYTES -> shuffleWriteMetrics._shuffleTargetBytes,
     input.BYTES_READ -> inputMetrics._bytesRead,
     input.RECORDS_READ -> inputMetrics._recordsRead,
     output.BYTES_WRITTEN -> outputMetrics._bytesWritten,
@@ -374,9 +373,6 @@ private[spark] object TaskMetrics extends Logging {
         tm.setUpdatedBlockStatuses(value.asInstanceOf[java.util.List[(BlockId, BlockStatus)]])
       } else if (name == shuffleRead.SHUFFLE_SOURCE_BYTES) {
         tm.shuffleReadMetrics._shuffleSourceBytes
-          .setValue(value.asInstanceOf[java.util.List[(Long, Long)]])
-      } else if (name == shuffleWrite.SHUFFLE_TARGET_BYTES) {
-        tm.shuffleWriteMetrics._shuffleTargetBytes
           .setValue(value.asInstanceOf[java.util.List[(Long, Long)]])
       } else {
         tm.nameToAccums.get(name).foreach(

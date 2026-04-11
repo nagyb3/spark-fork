@@ -392,9 +392,7 @@ class ShuffleReadMetrics private[spark](
 class ShuffleWriteMetrics private[spark](
     val bytesWritten: Long,
     val writeTime: Long,
-    val recordsWritten: Long,
-    @JsonDeserialize(contentAs = classOf[JLong])
-    val shuffleTargetBytes: Map[Long, Long])
+    val recordsWritten: Long)
 
 class TaskMetricDistributions private[spark](
     val quantiles: IndexedSeq[Double],

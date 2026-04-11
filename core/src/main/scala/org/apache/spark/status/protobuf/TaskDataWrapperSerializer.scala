@@ -83,9 +83,6 @@ private[protobuf] class TaskDataWrapperSerializer extends ProtobufSerDe[TaskData
     input.shuffleSourceBytes.foreach { case (taskId, bytes) =>
       builder.putShuffleSourceBytes(taskId, bytes)
     }
-    input.shuffleTargetBytes.foreach { case (partitionId, bytes) =>
-      builder.putShuffleTargetBytes(partitionId, bytes)
-    }
     builder.build().toByteArray
   }
 
@@ -141,9 +138,6 @@ private[protobuf] class TaskDataWrapperSerializer extends ProtobufSerDe[TaskData
       shuffleRemoteReqsDuration = binary.getShuffleRemoteReqsDuration,
       shuffleMergedRemoteReqDuration = binary.getShuffleMergedRemoteReqDuration,
       shuffleSourceBytes = (Map.empty[Long, Long] ++ binary.getShuffleSourceBytesMap.asScala.map {
-        case (k, v) => (k.longValue(), v.longValue())
-      }),
-      shuffleTargetBytes = (Map.empty[Long, Long] ++ binary.getShuffleTargetBytesMap.asScala.map {
         case (k, v) => (k.longValue(), v.longValue())
       }),
       shuffleBytesWritten = binary.getShuffleBytesWritten,

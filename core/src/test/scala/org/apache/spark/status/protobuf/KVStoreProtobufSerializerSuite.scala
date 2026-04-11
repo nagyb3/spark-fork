@@ -183,7 +183,6 @@ class KVStoreProtobufSerializerSuite extends SparkFunSuite {
         shuffleBytesWritten = 38L,
         shuffleWriteTime = 39L,
         shuffleRecordsWritten = 40L,
-        shuffleTargetBytes = Map(3L -> 38L),
         stageId = 41,
         stageAttemptId = 42)
 
@@ -239,7 +238,6 @@ class KVStoreProtobufSerializerSuite extends SparkFunSuite {
       assert(result.shuffleBytesWritten == input.shuffleBytesWritten)
       assert(result.shuffleWriteTime == input.shuffleWriteTime)
       assert(result.shuffleRecordsWritten == input.shuffleRecordsWritten)
-      assert(result.shuffleTargetBytes == input.shuffleTargetBytes)
       assert(result.stageId == input.stageId)
       assert(result.stageAttemptId == input.stageAttemptId)
     }
@@ -1057,7 +1055,6 @@ class KVStoreProtobufSerializerSuite extends SparkFunSuite {
       bytesWritten = 1L,
       writeTime = 2L,
       recordsWritten = 3L,
-      shuffleTargetBytes = Map(2L -> 1L)
     )
     val taskMetrics = new TaskMetrics(
       executorDeserializeTime = 1L,

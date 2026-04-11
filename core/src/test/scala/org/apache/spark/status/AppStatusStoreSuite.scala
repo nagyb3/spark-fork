@@ -327,7 +327,6 @@ class AppStatusStoreSuite extends SparkFunSuite {
       shuffleBytesWritten = i,
       shuffleWriteTime = i,
       shuffleRecordsWritten = i,
-      shuffleTargetBytes = Map.empty[Long, Long],
       stageId = stageId,
       stageAttemptId = attemptId)
   }
