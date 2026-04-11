@@ -594,7 +594,7 @@ final class ShuffleBlockFetcherIterator(
             shuffleMetrics.incShuffleSourceBytes(b.mapId, buf.size)
           case c: ShuffleBlockChunkId =>
             shuffleMetrics.incShuffleSourceBytes(c.shuffleMergeId.toLong, buf.size)
-            case _ =>
+          case _ =>
         }
         results.put(SuccessFetchResult(blockId, mapIndex, blockManager.blockManagerId,
           buf.size(), buf, false))
