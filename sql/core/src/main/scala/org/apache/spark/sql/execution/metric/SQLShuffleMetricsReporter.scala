@@ -85,6 +85,9 @@ class SQLShuffleReadMetricsReporter(
     _localBytesRead.add(v)
     tempMetrics.incLocalBytesRead(v)
   }
+  override def incShuffleSourceBytes(sourceTaskId: Long, bytes: Long): Unit = {
+    tempMetrics.incShuffleSourceBytes(sourceTaskId, bytes)
+  }
   override def incFetchWaitTime(v: Long): Unit = {
     _fetchWaitTime.add(v)
     tempMetrics.incFetchWaitTime(v)

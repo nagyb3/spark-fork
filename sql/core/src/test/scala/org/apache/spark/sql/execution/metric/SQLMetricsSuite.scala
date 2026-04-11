@@ -25,6 +25,7 @@ import scala.util.Random
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.apache.hadoop.mapreduce.{JobContext, TaskAttemptContext}
 
+import org.apache.spark.executor.TempShuffleReadMetrics
 import org.apache.spark.internal.io.FileCommitProtocol
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.aggregate.{Final, Partial}
@@ -158,6 +159,19 @@ class SQLMetricsSuite extends SharedSparkSession with SQLMetricsTestUtils
         enableWholeStage
       )
     }
+  }
+
+  test("SQL shuffle reporter forwards shuffleSourceBytes to task metrics") {
+    val tempMetrics = new TempShuffleReadMetrics
+    val reporter = new SQLShuffleReadMetricsReporter(
+      tempMetrics,
+      SQLShuffleReadMetricsReporter.createShuffleReadMetrics(spark.sparkContext))
+
+    reporter.incShuffleSourceBytes(10L, 120L)
+    reporter.incShuffleSourceBytes(10L, 5L)
+    reporter.incShuffleSourceBytes(11L, 7L)
+
+    assert(tempMetrics.shuffleSourceBytes === Map(10L -> 125L, 11L -> 7L))
   }
 
   test("WholeStageCodegen metrics") {
