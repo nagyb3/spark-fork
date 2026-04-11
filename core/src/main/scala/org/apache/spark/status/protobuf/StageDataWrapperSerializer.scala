@@ -246,7 +246,7 @@ private[protobuf] class StageDataWrapperSerializer extends ProtobufSerDe[StageDa
   }
 
   private def serializeShuffleWriteMetrics(
-    swm: ShuffleWriteMetrics): StoreTypes.ShuffleWriteMetrics = {
+      swm: ShuffleWriteMetrics): StoreTypes.ShuffleWriteMetrics = {
     StoreTypes.ShuffleWriteMetrics.newBuilder()
       .setBytesWritten(swm.bytesWritten)
       .setWriteTime(swm.writeTime)
