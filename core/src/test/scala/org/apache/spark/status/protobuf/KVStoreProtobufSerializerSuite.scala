@@ -1054,7 +1054,7 @@ class KVStoreProtobufSerializerSuite extends SparkFunSuite {
     val shuffleWriteMetrics = new ShuffleWriteMetrics(
       bytesWritten = 1L,
       writeTime = 2L,
-      recordsWritten = 3L,
+      recordsWritten = 3L
     )
     val taskMetrics = new TaskMetrics(
       executorDeserializeTime = 1L,
