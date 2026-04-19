@@ -104,7 +104,7 @@ class LiveEntitySuite extends SparkFunSuite {
       shuffleBytesWritten = 32L,
       shuffleWriteTime = 33L,
       shuffleRecordsWritten = 34L,
-      shuffleSourceBytes = Map(1L -> 35L),
+      shuffleSourceBytes = Map(1L -> 35L)
     )
 
     val negatedMetrics = makeNegative(originalMetrics)
