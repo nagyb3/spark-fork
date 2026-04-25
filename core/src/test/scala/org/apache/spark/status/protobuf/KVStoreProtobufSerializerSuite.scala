@@ -180,6 +180,7 @@ class KVStoreProtobufSerializerSuite extends SparkFunSuite {
         shuffleRemoteReqsDuration = 36L,
         shuffleMergedRemoteReqDuration = 37L,
         shuffleSourceBytes = Map(137L -> 500L),
+        blocksFetchedSource = Map(137L -> 2L),
         shuffleBytesWritten = 38L,
         shuffleWriteTime = 39L,
         shuffleRecordsWritten = 40L,
@@ -235,6 +236,7 @@ class KVStoreProtobufSerializerSuite extends SparkFunSuite {
       assert(result.shuffleRemoteReqsDuration == input.shuffleRemoteReqsDuration)
       assert(result.shuffleMergedRemoteReqDuration == input.shuffleMergedRemoteReqDuration)
       assert(result.shuffleSourceBytes == input.shuffleSourceBytes)
+      assert(result.blocksFetchedSource == input.blocksFetchedSource)
       assert(result.shuffleBytesWritten == input.shuffleBytesWritten)
       assert(result.shuffleWriteTime == input.shuffleWriteTime)
       assert(result.shuffleRecordsWritten == input.shuffleRecordsWritten)
@@ -1049,7 +1051,8 @@ class KVStoreProtobufSerializerSuite extends SparkFunSuite {
       recordsRead = 7L,
       remoteReqsDuration = 8L,
       shufflePushReadMetrics = shufflePushReadMetrics,
-      shuffleSourceBytes = Map(100L -> 108L)
+      shuffleSourceBytes = Map(100L -> 108L),
+      blocksFetchedSource = Map(100L -> 1L)
     )
     val shuffleWriteMetrics = new ShuffleWriteMetrics(
       bytesWritten = 1L,
@@ -1490,6 +1493,8 @@ class KVStoreProtobufSerializerSuite extends SparkFunSuite {
     assert(result.recordsRead == expected.recordsRead)
     assert(result.remoteReqsDuration == expected.remoteReqsDuration)
     checkAnswer(result.shufflePushReadMetrics, expected.shufflePushReadMetrics)
+    assert(result.shuffleSourceBytes == expected.shuffleSourceBytes)
+    assert(result.blocksFetchedSource == expected.blocksFetchedSource)
   }
 
   private def checkAnswer(result: ShufflePushReadMetrics,

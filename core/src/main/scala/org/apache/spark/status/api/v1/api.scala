@@ -387,7 +387,9 @@ class ShuffleReadMetrics private[spark](
     val remoteReqsDuration: Long,
     val shufflePushReadMetrics: ShufflePushReadMetrics,
     @JsonDeserialize(contentAs = classOf[JLong])
-    val shuffleSourceBytes: Map[Long, Long])
+    val shuffleSourceBytes: Map[Long, Long],
+    @JsonDeserialize(contentAs = classOf[JLong])
+    val blocksFetchedSource: Map[Long, Long])
 
 class ShuffleWriteMetrics private[spark](
     val bytesWritten: Long,

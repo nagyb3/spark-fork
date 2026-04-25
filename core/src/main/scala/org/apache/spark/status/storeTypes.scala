@@ -276,6 +276,7 @@ private[spark] class TaskDataWrapper(
       parent = TaskIndexNames.STAGE)
     val shuffleMergedRemoteReqDuration: Long,
     val shuffleSourceBytes: Map[Long, Long],
+    val blocksFetchedSource: Map[Long, Long],
     @KVIndexParam(value = TaskIndexNames.SHUFFLE_WRITE_SIZE, parent = TaskIndexNames.STAGE)
     val shuffleBytesWritten: Long,
     @KVIndexParam(value = TaskIndexNames.SHUFFLE_WRITE_TIME, parent = TaskIndexNames.STAGE)
@@ -333,7 +334,8 @@ private[spark] class TaskDataWrapper(
             getMetricValue(shuffleMergedRemoteBytesRead),
             getMetricValue(shuffleMergedLocalBytesRead),
             getMetricValue(shuffleMergedRemoteReqDuration)),
-          shuffleSourceBytes
+          shuffleSourceBytes,
+          blocksFetchedSource
         ),
         new ShuffleWriteMetrics(
           getMetricValue(shuffleBytesWritten),

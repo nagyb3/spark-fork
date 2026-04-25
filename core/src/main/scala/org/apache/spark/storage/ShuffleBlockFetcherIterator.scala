@@ -590,10 +590,13 @@ final class ShuffleBlockFetcherIterator(
         blockId match {
           case s: ShuffleBlockId =>
             shuffleMetrics.incShuffleSourceBytes(s.mapId, buf.size)
+            shuffleMetrics.incBlocksFetchedSource(s.mapId, 1L)
           case b: ShuffleBlockBatchId =>
             shuffleMetrics.incShuffleSourceBytes(b.mapId, buf.size)
+            shuffleMetrics.incBlocksFetchedSource(b.mapId, 1L)
           case c: ShuffleBlockChunkId =>
             shuffleMetrics.incShuffleSourceBytes(c.shuffleMergeId.toLong, buf.size)
+            shuffleMetrics.incBlocksFetchedSource(c.shuffleMergeId.toLong, 1L)
           case _ =>
         }
         results.put(SuccessFetchResult(blockId, mapIndex, blockManager.blockManagerId,
@@ -773,46 +776,60 @@ final class ShuffleBlockFetcherIterator(
   }
 
   private def shuffleLocalMetricsUpdate(blockId: BlockId, buf: ManagedBuffer): Unit = {
-    blockId match {
+    val blocksFetched = blockId match {
       case chunkId: ShuffleBlockChunkId =>
         val chunkCardinality = pushBasedFetchHelper.getShuffleChunkCardinality(chunkId)
         shuffleMetrics.incLocalMergedChunksFetched(1)
         shuffleMetrics.incLocalMergedBlocksFetched(chunkCardinality)
         shuffleMetrics.incLocalMergedBytesRead(buf.size)
         shuffleMetrics.incLocalBlocksFetched(chunkCardinality)
+        chunkCardinality.toLong
       case _ =>
         shuffleMetrics.incLocalBlocksFetched(1)
+        1L
     }
     shuffleMetrics.incLocalBytesRead(buf.size)
     blockId match {
-      case s: ShuffleBlockId => shuffleMetrics.incShuffleSourceBytes(s.mapId, buf.size)
-      case b: ShuffleBlockBatchId => shuffleMetrics.incShuffleSourceBytes(b.mapId, buf.size)
+      case s: ShuffleBlockId =>
+        shuffleMetrics.incShuffleSourceBytes(s.mapId, buf.size)
+        shuffleMetrics.incBlocksFetchedSource(s.mapId, blocksFetched)
+      case b: ShuffleBlockBatchId =>
+        shuffleMetrics.incShuffleSourceBytes(b.mapId, buf.size)
+        shuffleMetrics.incBlocksFetchedSource(b.mapId, blocksFetched)
       case c: ShuffleBlockChunkId =>
         shuffleMetrics.incShuffleSourceBytes(c.shuffleMergeId.toLong, buf.size)
+        shuffleMetrics.incBlocksFetchedSource(c.shuffleMergeId.toLong, blocksFetched)
       case _ =>
     }
   }
 
   private def shuffleRemoteMetricsUpdate(blockId: BlockId, buf: ManagedBuffer): Unit = {
-    blockId match {
+    val blocksFetched = blockId match {
       case chunkId: ShuffleBlockChunkId =>
         val chunkCardinality = pushBasedFetchHelper.getShuffleChunkCardinality(chunkId)
         shuffleMetrics.incRemoteMergedChunksFetched(1)
         shuffleMetrics.incRemoteMergedBlocksFetched(chunkCardinality)
         shuffleMetrics.incRemoteMergedBytesRead(buf.size)
         shuffleMetrics.incRemoteBlocksFetched(chunkCardinality)
+        chunkCardinality.toLong
       case _ =>
         shuffleMetrics.incRemoteBlocksFetched(1)
+        1L
     }
     shuffleMetrics.incRemoteBytesRead(buf.size)
     if (buf.isInstanceOf[FileSegmentManagedBuffer]) {
       shuffleMetrics.incRemoteBytesReadToDisk(buf.size)
     }
     blockId match {
-      case s: ShuffleBlockId => shuffleMetrics.incShuffleSourceBytes(s.mapId, buf.size)
-      case b: ShuffleBlockBatchId => shuffleMetrics.incShuffleSourceBytes(b.mapId, buf.size)
+      case s: ShuffleBlockId =>
+        shuffleMetrics.incShuffleSourceBytes(s.mapId, buf.size)
+        shuffleMetrics.incBlocksFetchedSource(s.mapId, blocksFetched)
+      case b: ShuffleBlockBatchId =>
+        shuffleMetrics.incShuffleSourceBytes(b.mapId, buf.size)
+        shuffleMetrics.incBlocksFetchedSource(b.mapId, blocksFetched)
       case c: ShuffleBlockChunkId =>
         shuffleMetrics.incShuffleSourceBytes(c.shuffleMergeId.toLong, buf.size)
+        shuffleMetrics.incBlocksFetchedSource(c.shuffleMergeId.toLong, blocksFetched)
       case _ =>
     }
   }

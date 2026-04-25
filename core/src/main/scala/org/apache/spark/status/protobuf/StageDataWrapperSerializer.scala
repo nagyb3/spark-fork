@@ -227,6 +227,9 @@ private[protobuf] class StageDataWrapperSerializer extends ProtobufSerDe[StageDa
     srm.shuffleSourceBytes.foreach { case (taskId, bytes) =>
       builder.putShuffleSourceBytes(taskId, bytes)
     }
+    srm.blocksFetchedSource.foreach { case (taskId, blocks) =>
+      builder.putBlocksFetchedSource(taskId, blocks)
+    }
     builder.build()
   }
 
@@ -693,6 +696,9 @@ private[protobuf] class StageDataWrapperSerializer extends ProtobufSerDe[StageDa
       binary.getRemoteReqsDuration,
       deserializeShufflePushReadMetrics(binary.getShufflePushReadMetrics),
       (Map.empty[Long, Long] ++ binary.getShuffleSourceBytesMap.asScala.map {
+        case (k, v) => (k.longValue(), v.longValue())
+      }),
+      (Map.empty[Long, Long] ++ binary.getBlocksFetchedSourceMap.asScala.map {
         case (k, v) => (k.longValue(), v.longValue())
       }))
   }

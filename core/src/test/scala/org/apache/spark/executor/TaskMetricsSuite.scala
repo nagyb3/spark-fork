@@ -184,10 +184,18 @@ class TaskMetricsSuite extends SparkFunSuite {
     sr1.incFetchWaitTime(1L)
     sr2.incFetchWaitTime(2L)
     sr3.incFetchWaitTime(3L)
+    sr1.incShuffleSourceBytes(1L, 100L)
+    sr2.incShuffleSourceBytes(1L, 50L)
+    sr3.incShuffleSourceBytes(2L, 25L)
+    sr1.incBlocksFetchedSource(1L, 2L)
+    sr2.incBlocksFetchedSource(1L, 1L)
+    sr3.incBlocksFetchedSource(2L, 3L)
     tm.mergeShuffleReadMetrics()
     assert(tm.shuffleReadMetrics.remoteBlocksFetched === 0L)
     assert(tm.shuffleReadMetrics.recordsRead === 20L)
     assert(tm.shuffleReadMetrics.fetchWaitTime === 6L)
+    assert(tm.shuffleReadMetrics.shuffleSourceBytes === Map(1L -> 150L, 2L -> 25L))
+    assert(tm.shuffleReadMetrics.blocksFetchedSource === Map(1L -> 3L, 2L -> 3L))
 
     // SPARK-5701: calling merge without any shuffle deps does nothing
     val tm2 = new TaskMetrics
