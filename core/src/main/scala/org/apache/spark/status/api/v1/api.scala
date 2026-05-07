@@ -400,7 +400,7 @@ class ShuffleReadMetrics private[spark](
     val blocksFetchedSource: Map[Long, Long],
     sourceMetrics0: Map[Long, ShuffleSourceMetrics] = null) {
 
-  @JsonProperty("sourcemetrics")
+  @JsonProperty("sourceMetrics")
   val sourceMetrics: Map[Long, ShuffleSourceMetrics] =
     if (sourceMetrics0 != null) sourceMetrics0
     else ShuffleReadMetrics.buildSourceMetrics(shuffleSourceBytes, blocksFetchedSource)
