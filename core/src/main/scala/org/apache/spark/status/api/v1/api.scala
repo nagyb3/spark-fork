@@ -21,7 +21,7 @@ import java.util.Date
 
 import scala.xml.{NodeSeq, Text}
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import com.fasterxml.jackson.annotation.{JsonIgnore, JsonIgnoreProperties, JsonProperty}
 import com.fasterxml.jackson.core.{JsonGenerator, JsonParser}
 import com.fasterxml.jackson.core.`type`.TypeReference
 import com.fasterxml.jackson.databind.{DeserializationContext, JsonDeserializer, JsonSerializer, SerializerProvider}
@@ -376,6 +376,10 @@ class ShufflePushReadMetrics private[spark](
   val localMergedBytesRead: Long,
   val remoteMergedReqsDuration: Long)
 
+class ShuffleSourceMetrics private[spark](
+    val shuffleSourceBytes: Long,
+    val blocksFetchedSource: Long)
+
 class ShuffleReadMetrics private[spark](
     val remoteBlocksFetched: Long,
     val localBlocksFetched: Long,
@@ -387,9 +391,32 @@ class ShuffleReadMetrics private[spark](
     val remoteReqsDuration: Long,
     val shufflePushReadMetrics: ShufflePushReadMetrics,
     @JsonDeserialize(contentAs = classOf[JLong])
+    @JsonIgnore
+    @transient
     val shuffleSourceBytes: Map[Long, Long],
     @JsonDeserialize(contentAs = classOf[JLong])
-    val blocksFetchedSource: Map[Long, Long])
+    @JsonIgnore
+    @transient
+    val blocksFetchedSource: Map[Long, Long],
+    sourceMetrics0: Map[Long, ShuffleSourceMetrics] = null) {
+
+  @JsonProperty("sourcemetrics")
+  val sourceMetrics: Map[Long, ShuffleSourceMetrics] =
+    if (sourceMetrics0 != null) sourceMetrics0
+    else ShuffleReadMetrics.buildSourceMetrics(shuffleSourceBytes, blocksFetchedSource)
+}
+
+object ShuffleReadMetrics {
+  private[api] def buildSourceMetrics(
+      shuffleSourceBytes: Map[Long, Long],
+      blocksFetchedSource: Map[Long, Long]): Map[Long, ShuffleSourceMetrics] = {
+    (shuffleSourceBytes.keySet ++ blocksFetchedSource.keySet).map { sourceTaskId =>
+      sourceTaskId -> new ShuffleSourceMetrics(
+        shuffleSourceBytes.getOrElse(sourceTaskId, 0L),
+        blocksFetchedSource.getOrElse(sourceTaskId, 0L))
+    }.toMap
+  }
+}
 
 class ShuffleWriteMetrics private[spark](
     val bytesWritten: Long,

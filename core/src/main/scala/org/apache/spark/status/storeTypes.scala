@@ -334,8 +334,14 @@ private[spark] class TaskDataWrapper(
             getMetricValue(shuffleMergedRemoteBytesRead),
             getMetricValue(shuffleMergedLocalBytesRead),
             getMetricValue(shuffleMergedRemoteReqDuration)),
-          shuffleSourceBytes,
-          blocksFetchedSource
+          shuffleSourceBytes = Map.empty[Long, Long],
+          blocksFetchedSource = Map.empty[Long, Long],
+          sourceMetrics0 = (shuffleSourceBytes.keySet ++ blocksFetchedSource.keySet).map {
+            sourceTaskId =>
+              sourceTaskId -> new ShuffleSourceMetrics(
+                shuffleSourceBytes.getOrElse(sourceTaskId, 0L),
+                blocksFetchedSource.getOrElse(sourceTaskId, 0L))
+          }.toMap
         ),
         new ShuffleWriteMetrics(
           getMetricValue(shuffleBytesWritten),
