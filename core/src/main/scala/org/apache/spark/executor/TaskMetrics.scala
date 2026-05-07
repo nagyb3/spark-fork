@@ -264,6 +264,8 @@ class TaskMetrics private[spark] () extends Serializable {
     shuffleRead.LOCAL_MERGED_BYTES_READ -> shuffleReadMetrics._localMergedBytesRead,
     shuffleRead.REMOTE_REQS_DURATION -> shuffleReadMetrics._remoteReqsDuration,
     shuffleRead.REMOTE_MERGED_REQS_DURATION -> shuffleReadMetrics._remoteMergedReqsDuration,
+    shuffleRead.SHUFFLE_SOURCE_BYTES -> shuffleReadMetrics._shuffleSourceBytes,
+    shuffleRead.BLOCKS_FETCHED_SOURCE -> shuffleReadMetrics._blocksFetchedSource,
     shuffleWrite.BYTES_WRITTEN -> shuffleWriteMetrics._bytesWritten,
     shuffleWrite.RECORDS_WRITTEN -> shuffleWriteMetrics._recordsWritten,
     shuffleWrite.WRITE_TIME -> shuffleWriteMetrics._writeTime,
@@ -370,6 +372,12 @@ private[spark] object TaskMetrics extends Logging {
       val value = info.update.get
       if (name == UPDATED_BLOCK_STATUSES) {
         tm.setUpdatedBlockStatuses(value.asInstanceOf[java.util.List[(BlockId, BlockStatus)]])
+      } else if (name == shuffleRead.SHUFFLE_SOURCE_BYTES) {
+        tm.shuffleReadMetrics._shuffleSourceBytes
+          .setValue(value.asInstanceOf[java.util.List[(Long, Long)]])
+      } else if (name == shuffleRead.BLOCKS_FETCHED_SOURCE) {
+        tm.shuffleReadMetrics._blocksFetchedSource
+          .setValue(value.asInstanceOf[java.util.List[(Long, Long)]])
       } else {
         tm.nameToAccums.get(name).foreach(
           _.asInstanceOf[LongAccumulator].setValue(value.asInstanceOf[Long])

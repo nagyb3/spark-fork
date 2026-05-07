@@ -17,6 +17,8 @@
 
 package org.apache.spark.status.protobuf
 
+import scala.jdk.CollectionConverters._
+
 import org.apache.spark.status.TaskDataWrapper
 import org.apache.spark.status.protobuf.Utils.{getOptional, getStringField, setStringField}
 import org.apache.spark.util.Utils.weakIntern
@@ -78,6 +80,12 @@ private[protobuf] class TaskDataWrapperSerializer extends ProtobufSerDe[TaskData
     input.accumulatorUpdates.foreach { update =>
       builder.addAccumulatorUpdates(AccumulableInfoSerializer.serialize(update))
     }
+    input.shuffleSourceBytes.foreach { case (taskId, bytes) =>
+      builder.putShuffleSourceBytes(taskId, bytes)
+    }
+    input.blocksFetchedSource.foreach { case (taskId, blocks) =>
+      builder.putBlocksFetchedSource(taskId, blocks)
+    }
     builder.build().toByteArray
   }
 
@@ -132,6 +140,13 @@ private[protobuf] class TaskDataWrapperSerializer extends ProtobufSerDe[TaskData
       shuffleMergedLocalBytesRead = binary.getShuffleMergedLocalBytesRead,
       shuffleRemoteReqsDuration = binary.getShuffleRemoteReqsDuration,
       shuffleMergedRemoteReqDuration = binary.getShuffleMergedRemoteReqDuration,
+      shuffleSourceBytes = (Map.empty[Long, Long] ++ binary.getShuffleSourceBytesMap.asScala.map {
+        case (k, v) => (k.longValue(), v.longValue())
+      }),
+      blocksFetchedSource =
+        (Map.empty[Long, Long] ++ binary.getBlocksFetchedSourceMap.asScala.map {
+          case (k, v) => (k.longValue(), v.longValue())
+        }),
       shuffleBytesWritten = binary.getShuffleBytesWritten,
       shuffleWriteTime = binary.getShuffleWriteTime,
       shuffleRecordsWritten = binary.getShuffleRecordsWritten,

@@ -173,7 +173,9 @@ private class LiveTask(
         metrics.shuffleReadMetrics.remoteMergedReqsDuration,
         metrics.shuffleWriteMetrics.bytesWritten,
         metrics.shuffleWriteMetrics.writeTime,
-        metrics.shuffleWriteMetrics.recordsWritten)
+        metrics.shuffleWriteMetrics.recordsWritten,
+        metrics.shuffleReadMetrics.shuffleSourceBytes,
+        metrics.shuffleReadMetrics.blocksFetchedSource)
 
       this.metrics = newMetrics
 
@@ -257,6 +259,8 @@ private class LiveTask(
       taskMetrics.shuffleReadMetrics.shufflePushReadMetrics.localMergedBytesRead,
       taskMetrics.shuffleReadMetrics.remoteReqsDuration,
       taskMetrics.shuffleReadMetrics.shufflePushReadMetrics.remoteMergedReqsDuration,
+      taskMetrics.shuffleReadMetrics.shuffleSourceBytes,
+      taskMetrics.shuffleReadMetrics.blocksFetchedSource,
       taskMetrics.shuffleWriteMetrics.bytesWritten,
       taskMetrics.shuffleWriteMetrics.writeTime,
       taskMetrics.shuffleWriteMetrics.recordsWritten,
@@ -783,9 +787,11 @@ private[spark] object LiveEntityHelpers {
       shuffleMergedLocalBytesRead: Long,
       shuffleRemoteReqsDuration: Long,
       shuffleMergedRemoteReqsDuration: Long,
-      shuffleBytesWritten: Long,
       shuffleWriteTime: Long,
-      shuffleRecordsWritten: Long): v1.TaskMetrics = {
+      shuffleBytesWritten: Long,
+      shuffleRecordsWritten: Long,
+      shuffleSourceBytes: Map[Long, Long],
+      blocksFetchedSource: Map[Long, Long]): v1.TaskMetrics = {
     new v1.TaskMetrics(
       executorDeserializeTime,
       executorDeserializeCpuTime,
@@ -822,7 +828,9 @@ private[spark] object LiveEntityHelpers {
           shuffleMergedRemoteBytesRead,
           shuffleMergedLocalBytesRead,
           shuffleMergedRemoteReqsDuration
-        )),
+        ),
+        shuffleSourceBytes,
+        blocksFetchedSource),
       new v1.ShuffleWriteMetrics(
         shuffleBytesWritten,
         shuffleWriteTime,
@@ -834,7 +842,9 @@ private[spark] object LiveEntityHelpers {
     createMetrics(default, default, default, default, default, default, default, default,
       default, default, default, default, default, default, default, default, default,
       default, default, default, default, default, default, default, default, default,
-      default, default, default, default, default, default, default, default)
+      default, default, default, default, default, default, default, default,
+      Map.empty,
+      Map.empty)
   }
 
   /** Add m2 values to m1. */
@@ -901,7 +911,9 @@ private[spark] object LiveEntityHelpers {
         updateMetricValue(m.shuffleReadMetrics.shufflePushReadMetrics.remoteMergedReqsDuration),
       shuffleBytesWritten = updateMetricValue(m.shuffleWriteMetrics.bytesWritten),
       shuffleWriteTime = updateMetricValue(m.shuffleWriteMetrics.writeTime),
-      shuffleRecordsWritten = updateMetricValue(m.shuffleWriteMetrics.recordsWritten))
+      shuffleRecordsWritten = updateMetricValue(m.shuffleWriteMetrics.recordsWritten),
+      shuffleSourceBytes = m.shuffleReadMetrics.shuffleSourceBytes,
+      blocksFetchedSource = m.shuffleReadMetrics.blocksFetchedSource)
   }
 
   private def addMetrics(m1: v1.TaskMetrics, m2: v1.TaskMetrics, mult: Int): v1.TaskMetrics = {
@@ -949,7 +961,13 @@ private[spark] object LiveEntityHelpers {
         m2.shuffleReadMetrics.shufflePushReadMetrics.remoteMergedReqsDuration * mult,
       m1.shuffleWriteMetrics.bytesWritten + m2.shuffleWriteMetrics.bytesWritten * mult,
       m1.shuffleWriteMetrics.writeTime + m2.shuffleWriteMetrics.writeTime * mult,
-      m1.shuffleWriteMetrics.recordsWritten + m2.shuffleWriteMetrics.recordsWritten * mult)
+      m1.shuffleWriteMetrics.recordsWritten + m2.shuffleWriteMetrics.recordsWritten * mult,
+      m1.shuffleReadMetrics.shuffleSourceBytes ++ m2.shuffleReadMetrics.shuffleSourceBytes
+        .map { case (taskId, bytes) => taskId -> (m1.shuffleReadMetrics.shuffleSourceBytes
+          .getOrElse(taskId, 0L) + bytes * mult) },
+      m1.shuffleReadMetrics.blocksFetchedSource ++ m2.shuffleReadMetrics.blocksFetchedSource
+        .map { case (taskId, blocks) => taskId ->
+          (m1.shuffleReadMetrics.blocksFetchedSource.getOrElse(taskId, 0L) + blocks * mult) })
   }
 
 }
