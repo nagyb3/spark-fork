@@ -264,8 +264,6 @@ class TaskMetrics private[spark] () extends Serializable {
     shuffleRead.LOCAL_MERGED_BYTES_READ -> shuffleReadMetrics._localMergedBytesRead,
     shuffleRead.REMOTE_REQS_DURATION -> shuffleReadMetrics._remoteReqsDuration,
     shuffleRead.REMOTE_MERGED_REQS_DURATION -> shuffleReadMetrics._remoteMergedReqsDuration,
-    shuffleRead.SHUFFLE_SOURCE_BYTES -> shuffleReadMetrics._shuffleSourceBytes,
-    shuffleRead.BLOCKS_FETCHED_SOURCE -> shuffleReadMetrics._blocksFetchedSource,
     shuffleWrite.BYTES_WRITTEN -> shuffleWriteMetrics._bytesWritten,
     shuffleWrite.RECORDS_WRITTEN -> shuffleWriteMetrics._recordsWritten,
     shuffleWrite.WRITE_TIME -> shuffleWriteMetrics._writeTime,
@@ -273,7 +271,10 @@ class TaskMetrics private[spark] () extends Serializable {
     input.RECORDS_READ -> inputMetrics._recordsRead,
     output.BYTES_WRITTEN -> outputMetrics._bytesWritten,
     output.RECORDS_WRITTEN -> outputMetrics._recordsWritten
-  ) ++ testAccum.map(TEST_ACCUM -> _)
+  ) ++ testAccum.map(TEST_ACCUM -> _) ++
+    Seq(
+      shuffleRead.SHUFFLE_SOURCE_BYTES -> shuffleReadMetrics._shuffleSourceBytes,
+      shuffleRead.BLOCKS_FETCHED_SOURCE -> shuffleReadMetrics._blocksFetchedSource)
 
   @transient private[spark] lazy val internalAccums: Seq[AccumulatorV2[_, _]] =
     nameToAccums.values.toIndexedSeq
