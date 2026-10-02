@@ -55,6 +55,12 @@ public final class JavaSparkPi {
 
     System.out.println("Pi is roughly " + 4.0 * count / n);
 
+    try {
+      Thread.sleep(3600000);
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+    }
+
     spark.stop();
   }
 }

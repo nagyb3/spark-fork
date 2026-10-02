@@ -282,7 +282,8 @@ class AppStatusStoreSuite extends SparkFunSuite {
       i, i, i, i, i, i, i, i, i, i,
       i, i, i, i, i, i, i, i, i, i,
       i, i, i, i, i, i, i, i, i, i,
-      i, i, i, i, stageId, attemptId)
+      i, Map.empty[Long, Long], Map.empty[Long, Long], i, i, i, stageId, attemptId
+    )
   }
 
   private def writeTaskDataToStore(i: Int, store: KVStore, status: String): Unit = {

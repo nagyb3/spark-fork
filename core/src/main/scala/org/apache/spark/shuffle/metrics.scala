@@ -31,6 +31,8 @@ private[spark] trait ShuffleReadMetricsReporter {
   private[spark] def incRemoteBytesRead(v: Long): Unit
   private[spark] def incRemoteBytesReadToDisk(v: Long): Unit
   private[spark] def incLocalBytesRead(v: Long): Unit
+  private[spark] def incShuffleSourceBytes(sourceTaskId: Long, bytes: Long): Unit
+  private[spark] def incBlocksFetchedSource(sourceTaskId: Long, blocks: Long): Unit
   private[spark] def incFetchWaitTime(v: Long): Unit
   private[spark] def incRecordsRead(v: Long): Unit
   private[spark] def incCorruptMergedBlockChunks(v: Long): Unit

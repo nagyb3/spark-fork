@@ -271,7 +271,10 @@ class TaskMetrics private[spark] () extends Serializable {
     input.RECORDS_READ -> inputMetrics._recordsRead,
     output.BYTES_WRITTEN -> outputMetrics._bytesWritten,
     output.RECORDS_WRITTEN -> outputMetrics._recordsWritten
-  ) ++ testAccum.map(TEST_ACCUM -> _)
+  ) ++ testAccum.map(TEST_ACCUM -> _) ++
+    Seq(
+      shuffleRead.SHUFFLE_SOURCE_BYTES -> shuffleReadMetrics._shuffleSourceBytes,
+      shuffleRead.BLOCKS_FETCHED_SOURCE -> shuffleReadMetrics._blocksFetchedSource)
 
   @transient private[spark] lazy val internalAccums: Seq[AccumulatorV2[_, _]] =
     nameToAccums.values.toIndexedSeq
@@ -370,6 +373,12 @@ private[spark] object TaskMetrics extends Logging {
       val value = info.update.get
       if (name == UPDATED_BLOCK_STATUSES) {
         tm.setUpdatedBlockStatuses(value.asInstanceOf[java.util.List[(BlockId, BlockStatus)]])
+      } else if (name == shuffleRead.SHUFFLE_SOURCE_BYTES) {
+        tm.shuffleReadMetrics._shuffleSourceBytes
+          .setValue(value.asInstanceOf[java.util.List[(Long, Long)]])
+      } else if (name == shuffleRead.BLOCKS_FETCHED_SOURCE) {
+        tm.shuffleReadMetrics._blocksFetchedSource
+          .setValue(value.asInstanceOf[java.util.List[(Long, Long)]])
       } else {
         tm.nameToAccums.get(name).foreach(
           _.asInstanceOf[LongAccumulator].setValue(value.asInstanceOf[Long])
