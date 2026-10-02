@@ -787,8 +787,8 @@ private[spark] object LiveEntityHelpers {
       shuffleMergedLocalBytesRead: Long,
       shuffleRemoteReqsDuration: Long,
       shuffleMergedRemoteReqsDuration: Long,
-      shuffleWriteTime: Long,
       shuffleBytesWritten: Long,
+      shuffleWriteTime: Long,
       shuffleRecordsWritten: Long,
       shuffleSourceBytes: Map[Long, Long],
       blocksFetchedSource: Map[Long, Long]): v1.TaskMetrics = {
