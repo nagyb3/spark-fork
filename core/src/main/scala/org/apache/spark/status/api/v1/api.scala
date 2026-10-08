@@ -378,7 +378,8 @@ class ShufflePushReadMetrics private[spark](
 
 class ShuffleSourceMetrics private[spark](
     val shuffleSourceBytes: Long,
-    val blocksFetchedSource: Long)
+    val blocksFetchedSource: Long,
+    val recordsReadSource: Long)
 
 class ShuffleReadMetrics private[spark](
     val remoteBlocksFetched: Long,
@@ -398,22 +399,32 @@ class ShuffleReadMetrics private[spark](
     @JsonIgnore
     @transient
     val blocksFetchedSource: Map[Long, Long],
+    @JsonDeserialize(contentAs = classOf[JLong])
+    @JsonIgnore
+    @transient
+    val recordsReadSource: Map[Long, Long],
+    @JsonDeserialize(contentAs = classOf[JLong])
+    val remoteReqsDurationByExecutor: Map[String, Long],
     sourceMetrics0: Map[Long, ShuffleSourceMetrics] = null) {
 
   @JsonProperty("sourceMetrics")
   val sourceMetrics: Map[Long, ShuffleSourceMetrics] =
     if (sourceMetrics0 != null) sourceMetrics0
-    else ShuffleReadMetrics.buildSourceMetrics(shuffleSourceBytes, blocksFetchedSource)
+    else ShuffleReadMetrics.buildSourceMetrics(
+      shuffleSourceBytes, blocksFetchedSource, recordsReadSource)
 }
 
 object ShuffleReadMetrics {
-  private[api] def buildSourceMetrics(
+  private[spark] def buildSourceMetrics(
       shuffleSourceBytes: Map[Long, Long],
-      blocksFetchedSource: Map[Long, Long]): Map[Long, ShuffleSourceMetrics] = {
-    (shuffleSourceBytes.keySet ++ blocksFetchedSource.keySet).map { sourceTaskId =>
-      sourceTaskId -> new ShuffleSourceMetrics(
-        shuffleSourceBytes.getOrElse(sourceTaskId, 0L),
-        blocksFetchedSource.getOrElse(sourceTaskId, 0L))
+      blocksFetchedSource: Map[Long, Long],
+      recordsReadSource: Map[Long, Long]): Map[Long, ShuffleSourceMetrics] = {
+    (shuffleSourceBytes.keySet ++ blocksFetchedSource.keySet ++ recordsReadSource.keySet).map {
+      sourceTaskId =>
+        sourceTaskId -> new ShuffleSourceMetrics(
+          shuffleSourceBytes.getOrElse(sourceTaskId, 0L),
+          blocksFetchedSource.getOrElse(sourceTaskId, 0L),
+          recordsReadSource.getOrElse(sourceTaskId, 0L))
     }.toMap
   }
 }

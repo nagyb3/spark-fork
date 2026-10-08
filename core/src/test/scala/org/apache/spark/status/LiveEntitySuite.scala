@@ -105,7 +105,9 @@ class LiveEntitySuite extends SparkFunSuite {
       shuffleWriteTime = 33L,
       shuffleRecordsWritten = 34L,
       shuffleSourceBytes = Map(1L -> 35L),
-      blocksFetchedSource = Map(1L -> 3L)
+      blocksFetchedSource = Map(1L -> 3L),
+      recordsReadSource = Map(1L -> 36L),
+      remoteReqsDurationByExecutor = Map("exec-1" -> 37L)
     )
 
     val negatedMetrics = makeNegative(originalMetrics)
@@ -184,6 +186,12 @@ class LiveEntitySuite extends SparkFunSuite {
       "shuffleReadMetrics.shuffleSourceBytes should remain unchanged (maps are not negated)")
     assert(negatedMetrics.shuffleReadMetrics.blocksFetchedSource === Map(1L -> 3L),
       "shuffleReadMetrics.blocksFetchedSource should remain unchanged (maps are not negated)")
+    assert(negatedMetrics.shuffleReadMetrics.recordsReadSource === Map(1L -> 36L),
+      "shuffleReadMetrics.recordsReadSource should remain unchanged (maps are not negated)")
+    assert(negatedMetrics.shuffleReadMetrics.remoteReqsDurationByExecutor ===
+      Map("exec-1" -> 37L),
+      "shuffleReadMetrics.remoteReqsDurationByExecutor should remain unchanged " +
+        "(maps are not negated)")
 
     // Verify shuffle write metrics
     assert(negatedMetrics.shuffleWriteMetrics.bytesWritten === expectedNegated(32L))

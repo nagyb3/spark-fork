@@ -175,7 +175,9 @@ private class LiveTask(
         metrics.shuffleWriteMetrics.writeTime,
         metrics.shuffleWriteMetrics.recordsWritten,
         metrics.shuffleReadMetrics.shuffleSourceBytes,
-        metrics.shuffleReadMetrics.blocksFetchedSource)
+        metrics.shuffleReadMetrics.blocksFetchedSource,
+        metrics.shuffleReadMetrics.recordsReadSource,
+        metrics.shuffleReadMetrics.remoteReqsDurationByExecutor)
 
       this.metrics = newMetrics
 
@@ -261,6 +263,8 @@ private class LiveTask(
       taskMetrics.shuffleReadMetrics.shufflePushReadMetrics.remoteMergedReqsDuration,
       taskMetrics.shuffleReadMetrics.shuffleSourceBytes,
       taskMetrics.shuffleReadMetrics.blocksFetchedSource,
+      taskMetrics.shuffleReadMetrics.recordsReadSource,
+      taskMetrics.shuffleReadMetrics.remoteReqsDurationByExecutor,
       taskMetrics.shuffleWriteMetrics.bytesWritten,
       taskMetrics.shuffleWriteMetrics.writeTime,
       taskMetrics.shuffleWriteMetrics.recordsWritten,
@@ -791,7 +795,9 @@ private[spark] object LiveEntityHelpers {
       shuffleWriteTime: Long,
       shuffleRecordsWritten: Long,
       shuffleSourceBytes: Map[Long, Long],
-      blocksFetchedSource: Map[Long, Long]): v1.TaskMetrics = {
+      blocksFetchedSource: Map[Long, Long],
+      recordsReadSource: Map[Long, Long],
+      remoteReqsDurationByExecutor: Map[String, Long]): v1.TaskMetrics = {
     new v1.TaskMetrics(
       executorDeserializeTime,
       executorDeserializeCpuTime,
@@ -830,7 +836,9 @@ private[spark] object LiveEntityHelpers {
           shuffleMergedRemoteReqsDuration
         ),
         shuffleSourceBytes,
-        blocksFetchedSource),
+        blocksFetchedSource,
+        recordsReadSource,
+        remoteReqsDurationByExecutor),
       new v1.ShuffleWriteMetrics(
         shuffleBytesWritten,
         shuffleWriteTime,
@@ -843,6 +851,8 @@ private[spark] object LiveEntityHelpers {
       default, default, default, default, default, default, default, default, default,
       default, default, default, default, default, default, default, default, default,
       default, default, default, default, default, default, default, default,
+      Map.empty,
+      Map.empty,
       Map.empty,
       Map.empty)
   }
@@ -913,7 +923,9 @@ private[spark] object LiveEntityHelpers {
       shuffleWriteTime = updateMetricValue(m.shuffleWriteMetrics.writeTime),
       shuffleRecordsWritten = updateMetricValue(m.shuffleWriteMetrics.recordsWritten),
       shuffleSourceBytes = m.shuffleReadMetrics.shuffleSourceBytes,
-      blocksFetchedSource = m.shuffleReadMetrics.blocksFetchedSource)
+      blocksFetchedSource = m.shuffleReadMetrics.blocksFetchedSource,
+      recordsReadSource = m.shuffleReadMetrics.recordsReadSource,
+      remoteReqsDurationByExecutor = m.shuffleReadMetrics.remoteReqsDurationByExecutor)
   }
 
   private def addMetrics(m1: v1.TaskMetrics, m2: v1.TaskMetrics, mult: Int): v1.TaskMetrics = {
@@ -962,12 +974,18 @@ private[spark] object LiveEntityHelpers {
       m1.shuffleWriteMetrics.bytesWritten + m2.shuffleWriteMetrics.bytesWritten * mult,
       m1.shuffleWriteMetrics.writeTime + m2.shuffleWriteMetrics.writeTime * mult,
       m1.shuffleWriteMetrics.recordsWritten + m2.shuffleWriteMetrics.recordsWritten * mult,
-      m1.shuffleReadMetrics.shuffleSourceBytes ++ m2.shuffleReadMetrics.shuffleSourceBytes
-        .map { case (taskId, bytes) => taskId -> (m1.shuffleReadMetrics.shuffleSourceBytes
-          .getOrElse(taskId, 0L) + bytes * mult) },
-      m1.shuffleReadMetrics.blocksFetchedSource ++ m2.shuffleReadMetrics.blocksFetchedSource
-        .map { case (taskId, blocks) => taskId ->
-          (m1.shuffleReadMetrics.blocksFetchedSource.getOrElse(taskId, 0L) + blocks * mult) })
+      addMapMetrics(m1.shuffleReadMetrics.shuffleSourceBytes,
+        m2.shuffleReadMetrics.shuffleSourceBytes, mult),
+      addMapMetrics(m1.shuffleReadMetrics.blocksFetchedSource,
+        m2.shuffleReadMetrics.blocksFetchedSource, mult),
+      addMapMetrics(m1.shuffleReadMetrics.recordsReadSource,
+        m2.shuffleReadMetrics.recordsReadSource, mult),
+      addMapMetrics(m1.shuffleReadMetrics.remoteReqsDurationByExecutor,
+        m2.shuffleReadMetrics.remoteReqsDurationByExecutor, mult))
+  }
+
+  private def addMapMetrics[K](m1: Map[K, Long], m2: Map[K, Long], mult: Int): Map[K, Long] = {
+    m1 ++ m2.map { case (key, value) => key -> (m1.getOrElse(key, 0L) + value * mult) }
   }
 
 }

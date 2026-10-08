@@ -150,5 +150,9 @@ class BlockStoreShuffleReaderSuite extends SparkFunSuite with LocalSparkContext 
       assert(buffer.callsToRetain === 1)
       assert(buffer.callsToRelease === 1)
     }
+
+    // Every record is attributed to the map task whose block it was read from.
+    assert(metrics.recordsReadSource ===
+      (0 until numMaps).map(_.toLong -> keyValuePairsPerMap.toLong).toMap)
   }
 }

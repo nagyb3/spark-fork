@@ -17,6 +17,8 @@
 
 package org.apache.spark.shuffle
 
+import org.apache.spark.storage.{BlockId, ShuffleBlockBatchId, ShuffleBlockChunkId, ShuffleBlockId}
+
 /**
  * An interface for reporting shuffle read metrics, for each shuffle. This interface assumes
  * all the methods are called on a single-threaded, i.e. concrete implementations would not need
@@ -33,6 +35,7 @@ private[spark] trait ShuffleReadMetricsReporter {
   private[spark] def incLocalBytesRead(v: Long): Unit
   private[spark] def incShuffleSourceBytes(sourceTaskId: Long, bytes: Long): Unit
   private[spark] def incBlocksFetchedSource(sourceTaskId: Long, blocks: Long): Unit
+  private[spark] def incRecordsReadSource(sourceTaskId: Long, records: Long): Unit
   private[spark] def incFetchWaitTime(v: Long): Unit
   private[spark] def incRecordsRead(v: Long): Unit
   private[spark] def incCorruptMergedBlockChunks(v: Long): Unit
@@ -44,7 +47,22 @@ private[spark] trait ShuffleReadMetricsReporter {
   private[spark] def incRemoteMergedBytesRead(v: Long): Unit
   private[spark] def incLocalMergedBytesRead(v: Long): Unit
   private[spark] def incRemoteReqsDuration(v: Long): Unit
+  private[spark] def incRemoteReqsDurationByExecutor(executorId: String, v: Long): Unit
   private[spark] def incRemoteMergedReqsDuration(v: Long): Unit
+}
+
+private[spark] object ShuffleReadMetricsReporter {
+
+  /**
+   * The source task ID that a shuffle block is attributed to in the per-source shuffle read
+   * metrics, or None for blocks that are not attributed to a source.
+   */
+  def sourceTaskId(blockId: BlockId): Option[Long] = blockId match {
+    case s: ShuffleBlockId => Some(s.mapId)
+    case b: ShuffleBlockBatchId => Some(b.mapId)
+    case c: ShuffleBlockChunkId => Some(c.shuffleMergeId.toLong)
+    case _ => None
+  }
 }
 
 

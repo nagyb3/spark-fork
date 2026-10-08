@@ -295,6 +295,7 @@ final class ShuffleBlockFetcherIterator(
           shuffleMetrics.incRemoteMergedReqsDuration(durationMs)
         }
         shuffleMetrics.incRemoteReqsDuration(durationMs)
+        shuffleMetrics.incRemoteReqsDurationByExecutor(address.executorId, durationMs)
       }
     }
 
@@ -587,17 +588,9 @@ final class ShuffleBlockFetcherIterator(
         shuffleMetrics.incLocalBlocksFetched(1)
         shuffleMetrics.incLocalBytesRead(buf.size)
         buf.retain()
-        blockId match {
-          case s: ShuffleBlockId =>
-            shuffleMetrics.incShuffleSourceBytes(s.mapId, buf.size)
-            shuffleMetrics.incBlocksFetchedSource(s.mapId, 1L)
-          case b: ShuffleBlockBatchId =>
-            shuffleMetrics.incShuffleSourceBytes(b.mapId, buf.size)
-            shuffleMetrics.incBlocksFetchedSource(b.mapId, 1L)
-          case c: ShuffleBlockChunkId =>
-            shuffleMetrics.incShuffleSourceBytes(c.shuffleMergeId.toLong, buf.size)
-            shuffleMetrics.incBlocksFetchedSource(c.shuffleMergeId.toLong, 1L)
-          case _ =>
+        ShuffleReadMetricsReporter.sourceTaskId(blockId).foreach { sourceTaskId =>
+          shuffleMetrics.incShuffleSourceBytes(sourceTaskId, buf.size)
+          shuffleMetrics.incBlocksFetchedSource(sourceTaskId, 1L)
         }
         results.put(SuccessFetchResult(blockId, mapIndex, blockManager.blockManagerId,
           buf.size(), buf, false))
@@ -789,17 +782,9 @@ final class ShuffleBlockFetcherIterator(
         1L
     }
     shuffleMetrics.incLocalBytesRead(buf.size)
-    blockId match {
-      case s: ShuffleBlockId =>
-        shuffleMetrics.incShuffleSourceBytes(s.mapId, buf.size)
-        shuffleMetrics.incBlocksFetchedSource(s.mapId, blocksFetched)
-      case b: ShuffleBlockBatchId =>
-        shuffleMetrics.incShuffleSourceBytes(b.mapId, buf.size)
-        shuffleMetrics.incBlocksFetchedSource(b.mapId, blocksFetched)
-      case c: ShuffleBlockChunkId =>
-        shuffleMetrics.incShuffleSourceBytes(c.shuffleMergeId.toLong, buf.size)
-        shuffleMetrics.incBlocksFetchedSource(c.shuffleMergeId.toLong, blocksFetched)
-      case _ =>
+    ShuffleReadMetricsReporter.sourceTaskId(blockId).foreach { sourceTaskId =>
+      shuffleMetrics.incShuffleSourceBytes(sourceTaskId, buf.size)
+      shuffleMetrics.incBlocksFetchedSource(sourceTaskId, blocksFetched)
     }
   }
 
@@ -820,17 +805,9 @@ final class ShuffleBlockFetcherIterator(
     if (buf.isInstanceOf[FileSegmentManagedBuffer]) {
       shuffleMetrics.incRemoteBytesReadToDisk(buf.size)
     }
-    blockId match {
-      case s: ShuffleBlockId =>
-        shuffleMetrics.incShuffleSourceBytes(s.mapId, buf.size)
-        shuffleMetrics.incBlocksFetchedSource(s.mapId, blocksFetched)
-      case b: ShuffleBlockBatchId =>
-        shuffleMetrics.incShuffleSourceBytes(b.mapId, buf.size)
-        shuffleMetrics.incBlocksFetchedSource(b.mapId, blocksFetched)
-      case c: ShuffleBlockChunkId =>
-        shuffleMetrics.incShuffleSourceBytes(c.shuffleMergeId.toLong, buf.size)
-        shuffleMetrics.incBlocksFetchedSource(c.shuffleMergeId.toLong, blocksFetched)
-      case _ =>
+    ShuffleReadMetricsReporter.sourceTaskId(blockId).foreach { sourceTaskId =>
+      shuffleMetrics.incShuffleSourceBytes(sourceTaskId, buf.size)
+      shuffleMetrics.incBlocksFetchedSource(sourceTaskId, blocksFetched)
     }
   }
 

@@ -46,7 +46,7 @@ import org.apache.spark.network.util.LimitedInputStream
 import org.apache.spark.shuffle.{FetchFailedException, ShuffleReadMetricsReporter}
 import org.apache.spark.storage.BlockManagerId.SHUFFLE_MERGER_IDENTIFIER
 import org.apache.spark.storage.ShuffleBlockFetcherIterator._
-import org.apache.spark.util.Utils
+import org.apache.spark.util.{Clock, ManualClock, SystemClock, Utils}
 
 
 class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite {
@@ -196,7 +196,8 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite {
       checksumEnabled: Boolean = true,
       checksumAlgorithm: String = "ADLER32",
       shuffleMetrics: Option[ShuffleReadMetricsReporter] = None,
-      doBatchFetch: Boolean = false): ShuffleBlockFetcherIterator = {
+      doBatchFetch: Boolean = false,
+      clock: Clock = new SystemClock()): ShuffleBlockFetcherIterator = {
     val tContext = taskContext.getOrElse(TaskContext.empty())
     new ShuffleBlockFetcherIterator(
       tContext,
@@ -222,7 +223,8 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite {
       checksumEnabled,
       checksumAlgorithm,
       shuffleMetrics.getOrElse(tContext.taskMetrics().createTempShuffleReadMetrics()),
-      doBatchFetch)
+      doBatchFetch,
+      clock)
   }
   // scalastyle:on argcount
 
@@ -364,6 +366,37 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite {
     // 2 remote blocks are read from the same block manager
     verifyFetchBlocksInvocationCount(1)
     assert(blockManager.hostLocalDirManager.get.getCachedHostLocalDirs.size === 1)
+  }
+
+  test("remote request duration is reported per source executor") {
+    val clock = new ManualClock()
+    val remoteBmId1 = BlockManagerId("remote-exec-1", "remote-host-1", 2)
+    val remoteBmId2 = BlockManagerId("remote-exec-2", "remote-host-2", 3)
+    val blocksByAddress = Map[BlockManagerId, Seq[BlockId]](
+      remoteBmId1 -> Seq(ShuffleBlockId(0, 0, 0), ShuffleBlockId(0, 1, 0)),
+      remoteBmId2 -> Seq(ShuffleBlockId(0, 2, 0)))
+    val buffers = blocksByAddress.values.flatten.map(_ -> createMockManagedBuffer()).toMap
+
+    // Each executor answers its single request after a different amount of time.
+    val requestDurations = Map(remoteBmId1.executorId -> 10L, remoteBmId2.executorId -> 30L)
+    answerFetchBlocks { invocation =>
+      val executorId = invocation.getArgument[String](2)
+      val blocks = invocation.getArgument[Array[String]](3)
+      val listener = invocation.getArgument[BlockFetchingListener](4)
+      clock.advance(requestDurations(executorId))
+      blocks.foreach(blockId => listener.onBlockFetchSuccess(blockId, buffers(BlockId(blockId))))
+    }
+
+    val shuffleMetrics = TaskContext.empty().taskMetrics.createTempShuffleReadMetrics()
+    val iterator = createShuffleBlockIteratorWithDefaults(
+      blocksByAddress.map { case (bmId, blockIds) => bmId -> toBlockList(blockIds, 1L, 0) },
+      shuffleMetrics = Some(shuffleMetrics),
+      clock = clock)
+    iterator.foreach { case (_, inputStream) => inputStream.close() }
+
+    verifyFetchBlocksInvocationCount(2)
+    assert(shuffleMetrics.remoteReqsDurationByExecutor === requestDurations)
+    assert(shuffleMetrics.remoteReqsDuration === 40L)
   }
 
   test("error during accessing host local dirs for executors") {
