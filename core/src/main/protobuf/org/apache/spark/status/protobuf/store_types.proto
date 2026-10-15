@@ -130,6 +130,9 @@ message TaskDataWrapper {
   int64 shuffle_merged_remote_req_duration = 51;
   map<int64, int64> shuffle_source_bytes = 52;
   map<int64, int64> blocks_fetched_source = 53;
+  map<int64, int64> records_read_source = 54;
+  map<string, int64> remote_reqs_duration_by_executor = 55;
+  map<int64, int64> fetch_wait_time_source = 56;
 }
 
 message ExecutorMetrics {
@@ -655,6 +658,9 @@ message ShuffleReadMetrics {
   ShufflePushReadMetrics shuffle_push_read_metrics = 9;
   map<int64, int64> shuffle_source_bytes = 10;
   map<int64, int64> blocks_fetched_source = 11;
+  map<int64, int64> records_read_source = 12;
+  map<string, int64> remote_reqs_duration_by_executor = 13;
+  map<int64, int64> fetch_wait_time_source = 14;
 }
 
 message ShufflePushReadMetrics {

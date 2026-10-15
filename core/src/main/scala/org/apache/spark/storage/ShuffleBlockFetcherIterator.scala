@@ -193,12 +193,16 @@ final class ShuffleBlockFetcherIterator(
 
   initialize()
 
-  private def withFetchWaitTimeTracked[T](f: => T): T = {
-    val startFetchWait = System.nanoTime()
+  /**
+   * Runs `f` and records the time spent in it as fetch wait time. Returns the result of `f`
+   * along with the recorded wait time in milliseconds.
+   */
+  private def withFetchWaitTimeTracked[T](f: => T): (T, Long) = {
+    val startFetchWait = clock.nanoTime()
     val res = f
-    val fetchWaitTime = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startFetchWait)
+    val fetchWaitTime = TimeUnit.NANOSECONDS.toMillis(clock.nanoTime() - startFetchWait)
     shuffleMetrics.incFetchWaitTime(fetchWaitTime)
-    res
+    (res, fetchWaitTime)
   }
 
   // Decrements the buffer reference count.
@@ -295,6 +299,7 @@ final class ShuffleBlockFetcherIterator(
           shuffleMetrics.incRemoteMergedReqsDuration(durationMs)
         }
         shuffleMetrics.incRemoteReqsDuration(durationMs)
+        shuffleMetrics.incRemoteReqsDurationByExecutor(address.executorId, durationMs)
       }
     }
 
@@ -587,17 +592,9 @@ final class ShuffleBlockFetcherIterator(
         shuffleMetrics.incLocalBlocksFetched(1)
         shuffleMetrics.incLocalBytesRead(buf.size)
         buf.retain()
-        blockId match {
-          case s: ShuffleBlockId =>
-            shuffleMetrics.incShuffleSourceBytes(s.mapId, buf.size)
-            shuffleMetrics.incBlocksFetchedSource(s.mapId, 1L)
-          case b: ShuffleBlockBatchId =>
-            shuffleMetrics.incShuffleSourceBytes(b.mapId, buf.size)
-            shuffleMetrics.incBlocksFetchedSource(b.mapId, 1L)
-          case c: ShuffleBlockChunkId =>
-            shuffleMetrics.incShuffleSourceBytes(c.shuffleMergeId.toLong, buf.size)
-            shuffleMetrics.incBlocksFetchedSource(c.shuffleMergeId.toLong, 1L)
-          case _ =>
+        ShuffleReadMetricsReporter.sourceTaskId(blockId).foreach { sourceTaskId =>
+          shuffleMetrics.incShuffleSourceBytes(sourceTaskId, buf.size)
+          shuffleMetrics.incBlocksFetchedSource(sourceTaskId, 1L)
         }
         results.put(SuccessFetchResult(blockId, mapIndex, blockManager.blockManagerId,
           buf.size(), buf, false))
@@ -789,17 +786,9 @@ final class ShuffleBlockFetcherIterator(
         1L
     }
     shuffleMetrics.incLocalBytesRead(buf.size)
-    blockId match {
-      case s: ShuffleBlockId =>
-        shuffleMetrics.incShuffleSourceBytes(s.mapId, buf.size)
-        shuffleMetrics.incBlocksFetchedSource(s.mapId, blocksFetched)
-      case b: ShuffleBlockBatchId =>
-        shuffleMetrics.incShuffleSourceBytes(b.mapId, buf.size)
-        shuffleMetrics.incBlocksFetchedSource(b.mapId, blocksFetched)
-      case c: ShuffleBlockChunkId =>
-        shuffleMetrics.incShuffleSourceBytes(c.shuffleMergeId.toLong, buf.size)
-        shuffleMetrics.incBlocksFetchedSource(c.shuffleMergeId.toLong, blocksFetched)
-      case _ =>
+    ShuffleReadMetricsReporter.sourceTaskId(blockId).foreach { sourceTaskId =>
+      shuffleMetrics.incShuffleSourceBytes(sourceTaskId, buf.size)
+      shuffleMetrics.incBlocksFetchedSource(sourceTaskId, blocksFetched)
     }
   }
 
@@ -820,17 +809,9 @@ final class ShuffleBlockFetcherIterator(
     if (buf.isInstanceOf[FileSegmentManagedBuffer]) {
       shuffleMetrics.incRemoteBytesReadToDisk(buf.size)
     }
-    blockId match {
-      case s: ShuffleBlockId =>
-        shuffleMetrics.incShuffleSourceBytes(s.mapId, buf.size)
-        shuffleMetrics.incBlocksFetchedSource(s.mapId, blocksFetched)
-      case b: ShuffleBlockBatchId =>
-        shuffleMetrics.incShuffleSourceBytes(b.mapId, buf.size)
-        shuffleMetrics.incBlocksFetchedSource(b.mapId, blocksFetched)
-      case c: ShuffleBlockChunkId =>
-        shuffleMetrics.incShuffleSourceBytes(c.shuffleMergeId.toLong, buf.size)
-        shuffleMetrics.incBlocksFetchedSource(c.shuffleMergeId.toLong, blocksFetched)
-      case _ =>
+    ShuffleReadMetricsReporter.sourceTaskId(blockId).foreach { sourceTaskId =>
+      shuffleMetrics.incShuffleSourceBytes(sourceTaskId, buf.size)
+      shuffleMetrics.incBlocksFetchedSource(sourceTaskId, blocksFetched)
     }
   }
 
@@ -861,10 +842,15 @@ final class ShuffleBlockFetcherIterator(
     // is also corrupt, so the previous stage could be retried.
     // For local shuffle block, throw FailureFetchResult for the first IOException.
     while (result == null) {
-      result = withFetchWaitTimeTracked[FetchResult](results.take())
+      val (fetchResult, fetchWaitTime) = withFetchWaitTimeTracked(results.take())
+      result = fetchResult
 
       result match {
         case SuccessFetchResult(blockId, mapIndex, address, size, buf, isNetworkReqDone) =>
+          // The task was waiting for this block, so attribute the wait to its source task.
+          ShuffleReadMetricsReporter.sourceTaskId(blockId).foreach { sourceTaskId =>
+            shuffleMetrics.incFetchWaitTimeSource(sourceTaskId, fetchWaitTime)
+          }
           if (address != blockManager.blockManagerId) {
             if (hostLocalBlocks.contains(blockId -> mapIndex) ||
               pushBasedFetchHelper.isLocalPushMergedBlockAddress(address)) {

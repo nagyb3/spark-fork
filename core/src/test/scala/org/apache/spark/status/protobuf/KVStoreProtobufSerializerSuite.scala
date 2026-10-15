@@ -181,6 +181,9 @@ class KVStoreProtobufSerializerSuite extends SparkFunSuite {
         shuffleMergedRemoteReqDuration = 37L,
         shuffleSourceBytes = Map(137L -> 500L),
         blocksFetchedSource = Map(137L -> 2L),
+        recordsReadSource = Map(137L -> 20L),
+        fetchWaitTimeSource = Map(137L -> 9L),
+        remoteReqsDurationByExecutor = Map("exec-1" -> 12L),
         shuffleBytesWritten = 38L,
         shuffleWriteTime = 39L,
         shuffleRecordsWritten = 40L,
@@ -237,6 +240,9 @@ class KVStoreProtobufSerializerSuite extends SparkFunSuite {
       assert(result.shuffleMergedRemoteReqDuration == input.shuffleMergedRemoteReqDuration)
       assert(result.shuffleSourceBytes == input.shuffleSourceBytes)
       assert(result.blocksFetchedSource == input.blocksFetchedSource)
+      assert(result.recordsReadSource == input.recordsReadSource)
+      assert(result.fetchWaitTimeSource == input.fetchWaitTimeSource)
+      assert(result.remoteReqsDurationByExecutor == input.remoteReqsDurationByExecutor)
       assert(result.shuffleBytesWritten == input.shuffleBytesWritten)
       assert(result.shuffleWriteTime == input.shuffleWriteTime)
       assert(result.shuffleRecordsWritten == input.shuffleRecordsWritten)
@@ -1052,7 +1058,10 @@ class KVStoreProtobufSerializerSuite extends SparkFunSuite {
       remoteReqsDuration = 8L,
       shufflePushReadMetrics = shufflePushReadMetrics,
       shuffleSourceBytes = Map(100L -> 108L),
-      blocksFetchedSource = Map(100L -> 1L)
+      blocksFetchedSource = Map(100L -> 1L),
+      recordsReadSource = Map(100L -> 7L),
+      fetchWaitTimeSource = Map(100L -> 3L),
+      remoteReqsDurationByExecutor = Map("exec-1" -> 8L)
     )
     val shuffleWriteMetrics = new ShuffleWriteMetrics(
       bytesWritten = 1L,
@@ -1495,6 +1504,9 @@ class KVStoreProtobufSerializerSuite extends SparkFunSuite {
     checkAnswer(result.shufflePushReadMetrics, expected.shufflePushReadMetrics)
     assert(result.shuffleSourceBytes == expected.shuffleSourceBytes)
     assert(result.blocksFetchedSource == expected.blocksFetchedSource)
+    assert(result.recordsReadSource == expected.recordsReadSource)
+    assert(result.fetchWaitTimeSource == expected.fetchWaitTimeSource)
+    assert(result.remoteReqsDurationByExecutor == expected.remoteReqsDurationByExecutor)
   }
 
   private def checkAnswer(result: ShufflePushReadMetrics,

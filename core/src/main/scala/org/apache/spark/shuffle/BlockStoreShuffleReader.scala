@@ -92,8 +92,22 @@ private[spark] class BlockStoreShuffleReader[K, C](
 
     val serializerInstance = dep.serializer.newInstance()
 
+    // Records read from the current block are counted locally and reported per source task
+    // once the block is done, so that the per-record path doesn't update a map.
+    var currentSourceTaskId: Option[Long] = None
+    var currentSourceRecordsRead = 0L
+    def reportSourceRecordsRead(): Unit = {
+      if (currentSourceRecordsRead > 0) {
+        currentSourceTaskId.foreach(readMetrics.incRecordsReadSource(_, currentSourceRecordsRead))
+      }
+      currentSourceRecordsRead = 0L
+    }
+
     // Create a key/value iterator for each stream
     val recordIter = wrappedStreams.flatMap { case (blockId, wrappedStream) =>
+      // The previous block has been fully read once flatMap moves on to the next one.
+      reportSourceRecordsRead()
+      currentSourceTaskId = ShuffleReadMetricsReporter.sourceTaskId(blockId)
       // Note: the asKeyValueIterator below wraps a key/value iterator inside of a
       // NextIterator. The NextIterator makes sure that close() is called on the
       // underlying InputStream when all records have been read.
@@ -104,9 +118,13 @@ private[spark] class BlockStoreShuffleReader[K, C](
     val metricIter = CompletionIterator[(Any, Any), Iterator[(Any, Any)]](
       recordIter.map { record =>
         readMetrics.incRecordsRead(1)
+        currentSourceRecordsRead += 1
         record
       },
-      context.taskMetrics().mergeShuffleReadMetrics())
+      {
+        reportSourceRecordsRead()
+        context.taskMetrics().mergeShuffleReadMetrics()
+      })
 
     // An interruptible iterator must be used here in order to support task cancellation
     val interruptibleIter = new InterruptibleIterator[(Any, Any)](context, metricIter)
