@@ -28,6 +28,7 @@ import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
 // scalastyle:on executioncontextglobal
 import scala.concurrent.Future
+import scala.concurrent.duration._
 
 import io.netty.util.internal.OutOfDirectMemoryError
 import org.apache.logging.log4j.Level
@@ -36,6 +37,7 @@ import org.mockito.Mockito.{doThrow, mock, times, verify, when}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.roaringbitmap.RoaringBitmap
+import org.scalatest.concurrent.Eventually.{eventually, interval, timeout}
 
 import org.apache.spark.{MapOutputTracker, SparkFunSuite, TaskContext}
 import org.apache.spark.MapOutputTracker.SHUFFLE_PUSH_MAP_ID
@@ -397,6 +399,45 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite {
     verifyFetchBlocksInvocationCount(2)
     assert(shuffleMetrics.remoteReqsDurationByExecutor === requestDurations)
     assert(shuffleMetrics.remoteReqsDuration === 40L)
+  }
+
+  test("fetch wait time is reported per source task") {
+    val clock = new ManualClock()
+    val remoteBmId = BlockManagerId("remote-exec-1", "remote-host-1", 2)
+    val blockIds = Seq(ShuffleBlockId(0, 0, 0), ShuffleBlockId(0, 1, 0))
+    val buffers = blockIds.map(_ -> createMockManagedBuffer()).toMap
+
+    // The blocks arrive one at a time, each after the task has been blocked waiting for it for a
+    // different amount of time.
+    val waitTimes = Map(0L -> 10L, 1L -> 30L)
+    val taskThread = Thread.currentThread()
+    val blockConsumed = new Semaphore(0)
+    answerFetchBlocks { invocation =>
+      val listener = invocation.getArgument[BlockFetchingListener](4)
+      Future {
+        blockIds.foreach { blockId =>
+          eventually(timeout(10.seconds), interval(1.millisecond)) {
+            assert(taskThread.getState === Thread.State.WAITING)
+          }
+          clock.advance(waitTimes(blockId.mapId))
+          listener.onBlockFetchSuccess(blockId.toString, buffers(blockId))
+          blockConsumed.acquire()
+        }
+      }
+    }
+
+    val shuffleMetrics = TaskContext.empty().taskMetrics.createTempShuffleReadMetrics()
+    val iterator = createShuffleBlockIteratorWithDefaults(
+      Map(remoteBmId -> toBlockList(blockIds, 1L, 0)),
+      shuffleMetrics = Some(shuffleMetrics),
+      clock = clock)
+    blockIds.foreach { _ =>
+      iterator.next()._2.close()
+      blockConsumed.release()
+    }
+
+    assert(shuffleMetrics.fetchWaitTimeSource === waitTimes)
+    assert(shuffleMetrics.fetchWaitTime === 40L)
   }
 
   test("error during accessing host local dirs for executors") {

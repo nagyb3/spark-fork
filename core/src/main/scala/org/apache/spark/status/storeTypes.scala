@@ -278,6 +278,7 @@ private[spark] class TaskDataWrapper(
     val shuffleSourceBytes: Map[Long, Long],
     val blocksFetchedSource: Map[Long, Long],
     val recordsReadSource: Map[Long, Long],
+    val fetchWaitTimeSource: Map[Long, Long],
     val remoteReqsDurationByExecutor: Map[String, Long],
     @KVIndexParam(value = TaskIndexNames.SHUFFLE_WRITE_SIZE, parent = TaskIndexNames.STAGE)
     val shuffleBytesWritten: Long,
@@ -339,9 +340,10 @@ private[spark] class TaskDataWrapper(
           shuffleSourceBytes = Map.empty[Long, Long],
           blocksFetchedSource = Map.empty[Long, Long],
           recordsReadSource = Map.empty[Long, Long],
+          fetchWaitTimeSource = Map.empty[Long, Long],
           remoteReqsDurationByExecutor = remoteReqsDurationByExecutor,
           sourceMetrics0 = ShuffleReadMetrics.buildSourceMetrics(
-            shuffleSourceBytes, blocksFetchedSource, recordsReadSource)
+            shuffleSourceBytes, blocksFetchedSource, recordsReadSource, fetchWaitTimeSource)
         ),
         new ShuffleWriteMetrics(
           getMetricValue(shuffleBytesWritten),

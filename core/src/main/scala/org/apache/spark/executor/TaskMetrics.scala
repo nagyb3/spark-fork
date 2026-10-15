@@ -276,6 +276,7 @@ class TaskMetrics private[spark] () extends Serializable {
       shuffleRead.SHUFFLE_SOURCE_BYTES -> shuffleReadMetrics._shuffleSourceBytes,
       shuffleRead.BLOCKS_FETCHED_SOURCE -> shuffleReadMetrics._blocksFetchedSource,
       shuffleRead.RECORDS_READ_SOURCE -> shuffleReadMetrics._recordsReadSource,
+      shuffleRead.FETCH_WAIT_TIME_SOURCE -> shuffleReadMetrics._fetchWaitTimeSource,
       shuffleRead.REMOTE_REQS_DURATION_BY_EXECUTOR ->
         shuffleReadMetrics._remoteReqsDurationByExecutor)
 
@@ -384,6 +385,9 @@ private[spark] object TaskMetrics extends Logging {
           .setValue(value.asInstanceOf[java.util.List[(Long, Long)]])
       } else if (name == shuffleRead.RECORDS_READ_SOURCE) {
         tm.shuffleReadMetrics._recordsReadSource
+          .setValue(value.asInstanceOf[java.util.List[(Long, Long)]])
+      } else if (name == shuffleRead.FETCH_WAIT_TIME_SOURCE) {
+        tm.shuffleReadMetrics._fetchWaitTimeSource
           .setValue(value.asInstanceOf[java.util.List[(Long, Long)]])
       } else if (name == shuffleRead.REMOTE_REQS_DURATION_BY_EXECUTOR) {
         tm.shuffleReadMetrics._remoteReqsDurationByExecutor

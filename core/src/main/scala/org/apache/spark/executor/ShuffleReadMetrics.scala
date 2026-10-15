@@ -51,6 +51,7 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
   private[executor] val _shuffleSourceBytes = new CollectionAccumulator[(Long, Long)]
   private[executor] val _blocksFetchedSource = new CollectionAccumulator[(Long, Long)]
   private[executor] val _recordsReadSource = new CollectionAccumulator[(Long, Long)]
+  private[executor] val _fetchWaitTimeSource = new CollectionAccumulator[(Long, Long)]
   private[executor] val _remoteReqsDurationByExecutor =
     new CollectionAccumulator[(String, Long)]
 
@@ -175,6 +176,15 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
   }
 
   /**
+   * Map of source task IDs to the time the task spent blocked waiting for shuffle input data
+   * that ended with a block from each source. This is a subset of [[fetchWaitTime]]: waits that
+   * don't end with a block attributable to a source task are only counted in the total.
+   */
+  def fetchWaitTimeSource: Map[Long, Long] = {
+    _fetchWaitTimeSource.value.asScala.groupMapReduce(_._1)(_._2)(_ + _).toMap
+  }
+
+  /**
    * Map of executor IDs to the total time taken for remote requests to that executor.
    */
   def remoteReqsDurationByExecutor: Map[String, Long] = {
@@ -191,6 +201,10 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
 
   private[spark] def incRecordsReadSource(sourceTaskId: Long, records: Long): Unit = {
     _recordsReadSource.add((sourceTaskId, records))
+  }
+
+  private[spark] def incFetchWaitTimeSource(sourceTaskId: Long, v: Long): Unit = {
+    _fetchWaitTimeSource.add((sourceTaskId, v))
   }
 
   private[spark] def incRemoteReqsDurationByExecutor(executorId: String, v: Long): Unit = {
@@ -269,6 +283,7 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
     _shuffleSourceBytes.reset()
     _blocksFetchedSource.reset()
     _recordsReadSource.reset()
+    _fetchWaitTimeSource.reset()
     _remoteReqsDurationByExecutor.reset()
     metrics.foreach { metric =>
       _remoteBlocksFetched.add(metric.remoteBlocksFetched)
@@ -296,6 +311,9 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
       }
       metric.recordsReadSource.foreach { case (taskId, records) =>
         _recordsReadSource.add((taskId, records))
+      }
+      metric.fetchWaitTimeSource.foreach { case (taskId, waitTime) =>
+        _fetchWaitTimeSource.add((taskId, waitTime))
       }
       metric.remoteReqsDurationByExecutor.foreach { case (executorId, duration) =>
         _remoteReqsDurationByExecutor.add((executorId, duration))
@@ -334,6 +352,8 @@ private[spark] class TempShuffleReadMetrics extends ShuffleReadMetricsReporter {
     scala.collection.mutable.Map.empty[Long, Long].withDefaultValue(0L)
   private[this] val _recordsReadSource: scala.collection.mutable.Map[Long, Long] =
     scala.collection.mutable.Map.empty[Long, Long].withDefaultValue(0L)
+  private[this] val _fetchWaitTimeSource: scala.collection.mutable.Map[Long, Long] =
+    scala.collection.mutable.Map.empty[Long, Long].withDefaultValue(0L)
   private[this] val _remoteReqsDurationByExecutor: scala.collection.mutable.Map[String, Long] =
     scala.collection.mutable.Map.empty[String, Long].withDefaultValue(0L)
 
@@ -346,6 +366,9 @@ private[spark] class TempShuffleReadMetrics extends ShuffleReadMetricsReporter {
   }
   override def incRecordsReadSource(sourceTaskId: Long, records: Long): Unit = {
     _recordsReadSource(sourceTaskId) = _recordsReadSource.getOrElse(sourceTaskId, 0L) + records
+  }
+  override def incFetchWaitTimeSource(sourceTaskId: Long, v: Long): Unit = {
+    _fetchWaitTimeSource(sourceTaskId) = _fetchWaitTimeSource.getOrElse(sourceTaskId, 0L) + v
   }
   override def incRemoteReqsDurationByExecutor(executorId: String, v: Long): Unit = {
     _remoteReqsDurationByExecutor(executorId) =
@@ -389,5 +412,6 @@ private[spark] class TempShuffleReadMetrics extends ShuffleReadMetricsReporter {
   def shuffleSourceBytes: Map[Long, Long] = _shuffleSourceBytes.toMap
   def blocksFetchedSource: Map[Long, Long] = _blocksFetchedSource.toMap
   def recordsReadSource: Map[Long, Long] = _recordsReadSource.toMap
+  def fetchWaitTimeSource: Map[Long, Long] = _fetchWaitTimeSource.toMap
   def remoteReqsDurationByExecutor: Map[String, Long] = _remoteReqsDurationByExecutor.toMap
 }

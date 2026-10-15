@@ -89,6 +89,9 @@ private[protobuf] class TaskDataWrapperSerializer extends ProtobufSerDe[TaskData
     input.recordsReadSource.foreach { case (taskId, records) =>
       builder.putRecordsReadSource(taskId, records)
     }
+    input.fetchWaitTimeSource.foreach { case (taskId, waitTime) =>
+      builder.putFetchWaitTimeSource(taskId, waitTime)
+    }
     input.remoteReqsDurationByExecutor.foreach { case (executorId, duration) =>
       builder.putRemoteReqsDurationByExecutor(executorId, duration)
     }
@@ -155,6 +158,10 @@ private[protobuf] class TaskDataWrapperSerializer extends ProtobufSerDe[TaskData
         }),
       recordsReadSource =
         (Map.empty[Long, Long] ++ binary.getRecordsReadSourceMap.asScala.map {
+          case (k, v) => (k.longValue(), v.longValue())
+        }),
+      fetchWaitTimeSource =
+        (Map.empty[Long, Long] ++ binary.getFetchWaitTimeSourceMap.asScala.map {
           case (k, v) => (k.longValue(), v.longValue())
         }),
       remoteReqsDurationByExecutor =

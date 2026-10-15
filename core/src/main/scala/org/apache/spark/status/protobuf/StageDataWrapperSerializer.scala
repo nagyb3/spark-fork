@@ -233,6 +233,9 @@ private[protobuf] class StageDataWrapperSerializer extends ProtobufSerDe[StageDa
     srm.recordsReadSource.foreach { case (taskId, records) =>
       builder.putRecordsReadSource(taskId, records)
     }
+    srm.fetchWaitTimeSource.foreach { case (taskId, waitTime) =>
+      builder.putFetchWaitTimeSource(taskId, waitTime)
+    }
     srm.remoteReqsDurationByExecutor.foreach { case (executorId, duration) =>
       builder.putRemoteReqsDurationByExecutor(executorId, duration)
     }
@@ -708,6 +711,9 @@ private[protobuf] class StageDataWrapperSerializer extends ProtobufSerDe[StageDa
         case (k, v) => (k.longValue(), v.longValue())
       }),
       (Map.empty[Long, Long] ++ binary.getRecordsReadSourceMap.asScala.map {
+        case (k, v) => (k.longValue(), v.longValue())
+      }),
+      (Map.empty[Long, Long] ++ binary.getFetchWaitTimeSourceMap.asScala.map {
         case (k, v) => (k.longValue(), v.longValue())
       }),
       (Map.empty[String, Long] ++ binary.getRemoteReqsDurationByExecutorMap.asScala.map {

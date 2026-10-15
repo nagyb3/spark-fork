@@ -193,12 +193,16 @@ final class ShuffleBlockFetcherIterator(
 
   initialize()
 
-  private def withFetchWaitTimeTracked[T](f: => T): T = {
-    val startFetchWait = System.nanoTime()
+  /**
+   * Runs `f` and records the time spent in it as fetch wait time. Returns the result of `f`
+   * along with the recorded wait time in milliseconds.
+   */
+  private def withFetchWaitTimeTracked[T](f: => T): (T, Long) = {
+    val startFetchWait = clock.nanoTime()
     val res = f
-    val fetchWaitTime = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startFetchWait)
+    val fetchWaitTime = TimeUnit.NANOSECONDS.toMillis(clock.nanoTime() - startFetchWait)
     shuffleMetrics.incFetchWaitTime(fetchWaitTime)
-    res
+    (res, fetchWaitTime)
   }
 
   // Decrements the buffer reference count.
@@ -838,10 +842,15 @@ final class ShuffleBlockFetcherIterator(
     // is also corrupt, so the previous stage could be retried.
     // For local shuffle block, throw FailureFetchResult for the first IOException.
     while (result == null) {
-      result = withFetchWaitTimeTracked[FetchResult](results.take())
+      val (fetchResult, fetchWaitTime) = withFetchWaitTimeTracked(results.take())
+      result = fetchResult
 
       result match {
         case SuccessFetchResult(blockId, mapIndex, address, size, buf, isNetworkReqDone) =>
+          // The task was waiting for this block, so attribute the wait to its source task.
+          ShuffleReadMetricsReporter.sourceTaskId(blockId).foreach { sourceTaskId =>
+            shuffleMetrics.incFetchWaitTimeSource(sourceTaskId, fetchWaitTime)
+          }
           if (address != blockManager.blockManagerId) {
             if (hostLocalBlocks.contains(blockId -> mapIndex) ||
               pushBasedFetchHelper.isLocalPushMergedBlockAddress(address)) {

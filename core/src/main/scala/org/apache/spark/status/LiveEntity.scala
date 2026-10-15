@@ -177,6 +177,7 @@ private class LiveTask(
         metrics.shuffleReadMetrics.shuffleSourceBytes,
         metrics.shuffleReadMetrics.blocksFetchedSource,
         metrics.shuffleReadMetrics.recordsReadSource,
+        metrics.shuffleReadMetrics.fetchWaitTimeSource,
         metrics.shuffleReadMetrics.remoteReqsDurationByExecutor)
 
       this.metrics = newMetrics
@@ -264,6 +265,7 @@ private class LiveTask(
       taskMetrics.shuffleReadMetrics.shuffleSourceBytes,
       taskMetrics.shuffleReadMetrics.blocksFetchedSource,
       taskMetrics.shuffleReadMetrics.recordsReadSource,
+      taskMetrics.shuffleReadMetrics.fetchWaitTimeSource,
       taskMetrics.shuffleReadMetrics.remoteReqsDurationByExecutor,
       taskMetrics.shuffleWriteMetrics.bytesWritten,
       taskMetrics.shuffleWriteMetrics.writeTime,
@@ -797,6 +799,7 @@ private[spark] object LiveEntityHelpers {
       shuffleSourceBytes: Map[Long, Long],
       blocksFetchedSource: Map[Long, Long],
       recordsReadSource: Map[Long, Long],
+      fetchWaitTimeSource: Map[Long, Long],
       remoteReqsDurationByExecutor: Map[String, Long]): v1.TaskMetrics = {
     new v1.TaskMetrics(
       executorDeserializeTime,
@@ -838,6 +841,7 @@ private[spark] object LiveEntityHelpers {
         shuffleSourceBytes,
         blocksFetchedSource,
         recordsReadSource,
+        fetchWaitTimeSource,
         remoteReqsDurationByExecutor),
       new v1.ShuffleWriteMetrics(
         shuffleBytesWritten,
@@ -851,6 +855,7 @@ private[spark] object LiveEntityHelpers {
       default, default, default, default, default, default, default, default, default,
       default, default, default, default, default, default, default, default, default,
       default, default, default, default, default, default, default, default,
+      Map.empty,
       Map.empty,
       Map.empty,
       Map.empty,
@@ -925,6 +930,7 @@ private[spark] object LiveEntityHelpers {
       shuffleSourceBytes = m.shuffleReadMetrics.shuffleSourceBytes,
       blocksFetchedSource = m.shuffleReadMetrics.blocksFetchedSource,
       recordsReadSource = m.shuffleReadMetrics.recordsReadSource,
+      fetchWaitTimeSource = m.shuffleReadMetrics.fetchWaitTimeSource,
       remoteReqsDurationByExecutor = m.shuffleReadMetrics.remoteReqsDurationByExecutor)
   }
 
@@ -980,6 +986,8 @@ private[spark] object LiveEntityHelpers {
         m2.shuffleReadMetrics.blocksFetchedSource, mult),
       addMapMetrics(m1.shuffleReadMetrics.recordsReadSource,
         m2.shuffleReadMetrics.recordsReadSource, mult),
+      addMapMetrics(m1.shuffleReadMetrics.fetchWaitTimeSource,
+        m2.shuffleReadMetrics.fetchWaitTimeSource, mult),
       addMapMetrics(m1.shuffleReadMetrics.remoteReqsDurationByExecutor,
         m2.shuffleReadMetrics.remoteReqsDurationByExecutor, mult))
   }

@@ -37,6 +37,7 @@ private[spark] trait ShuffleReadMetricsReporter {
   private[spark] def incBlocksFetchedSource(sourceTaskId: Long, blocks: Long): Unit
   private[spark] def incRecordsReadSource(sourceTaskId: Long, records: Long): Unit
   private[spark] def incFetchWaitTime(v: Long): Unit
+  private[spark] def incFetchWaitTimeSource(sourceTaskId: Long, v: Long): Unit
   private[spark] def incRecordsRead(v: Long): Unit
   private[spark] def incCorruptMergedBlockChunks(v: Long): Unit
   private[spark] def incMergedFetchFallbackCount(v: Long): Unit
