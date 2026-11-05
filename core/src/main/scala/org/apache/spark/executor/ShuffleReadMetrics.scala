@@ -48,10 +48,12 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
   private[executor] val _localMergedBytesRead = new LongAccumulator
   private[executor] val _remoteReqsDuration = new LongAccumulator
   private[executor] val _remoteMergedReqsDuration = new LongAccumulator
+  private[executor] val _recordsProcessTime = new LongAccumulator
   private[executor] val _shuffleSourceBytes = new CollectionAccumulator[(Long, Long)]
   private[executor] val _blocksFetchedSource = new CollectionAccumulator[(Long, Long)]
   private[executor] val _recordsReadSource = new CollectionAccumulator[(Long, Long)]
   private[executor] val _fetchWaitTimeSource = new CollectionAccumulator[(Long, Long)]
+  private[executor] val _recordProcessTimeHistogram = new CollectionAccumulator[(Long, Long)]
   private[executor] val _remoteReqsDurationByExecutor =
     new CollectionAccumulator[(String, Long)]
 
@@ -154,6 +156,8 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
    */
   def remoteMergedReqsDuration: Long = _remoteMergedReqsDuration.sum
 
+  def recordsProcessTime: Long = _recordsProcessTime.sum
+
   /**
    * Map of source task IDs to bytes shuffled from each source.
    */
@@ -184,6 +188,10 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
     _fetchWaitTimeSource.value.asScala.groupMapReduce(_._1)(_._2)(_ + _).toMap
   }
 
+  def recordProcessTimeHistogram: Map[Long, Long] = {
+    _recordProcessTimeHistogram.value.asScala.groupMapReduce(_._1)(_._2)(_ + _).toMap
+  }
+
   /**
    * Map of executor IDs to the total time taken for remote requests to that executor.
    */
@@ -205,6 +213,10 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
 
   private[spark] def incFetchWaitTimeSource(sourceTaskId: Long, v: Long): Unit = {
     _fetchWaitTimeSource.add((sourceTaskId, v))
+  }
+
+  private[spark] def incRecordProcessTimeHistogram(bucket: Long, count: Long): Unit = {
+    _recordProcessTimeHistogram.add((bucket, count))
   }
 
   private[spark] def incRemoteReqsDurationByExecutor(executorId: String, v: Long): Unit = {
@@ -230,6 +242,7 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
     _localMergedBytesRead.add(v)
   private[spark] def incRemoteReqsDuration(v: Long): Unit = _remoteReqsDuration.add(v)
   private[spark] def incRemoteMergedReqsDuration(v: Long): Unit = _remoteMergedReqsDuration.add(v)
+  private[spark] def incRecordsProcessTime(v: Long): Unit = _recordsProcessTime.add(v)
 
   private[spark] def setRemoteBlocksFetched(v: Int): Unit = _remoteBlocksFetched.setValue(v)
   private[spark] def setLocalBlocksFetched(v: Int): Unit = _localBlocksFetched.setValue(v)
@@ -280,10 +293,12 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
     _localMergedBytesRead.setValue(0)
     _remoteReqsDuration.setValue(0)
     _remoteMergedReqsDuration.setValue(0)
+    _recordsProcessTime.setValue(0)
     _shuffleSourceBytes.reset()
     _blocksFetchedSource.reset()
     _recordsReadSource.reset()
     _fetchWaitTimeSource.reset()
+    _recordProcessTimeHistogram.reset()
     _remoteReqsDurationByExecutor.reset()
     metrics.foreach { metric =>
       _remoteBlocksFetched.add(metric.remoteBlocksFetched)
@@ -303,6 +318,7 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
       _localMergedBytesRead.add(metric.localMergedBytesRead)
       _remoteReqsDuration.add(metric.remoteReqsDuration)
       _remoteMergedReqsDuration.add(metric.remoteMergedReqsDuration)
+      _recordsProcessTime.add(metric.recordsProcessTime)
       metric.shuffleSourceBytes.foreach { case (taskId, bytes) =>
         _shuffleSourceBytes.add((taskId, bytes))
       }
@@ -314,6 +330,9 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
       }
       metric.fetchWaitTimeSource.foreach { case (taskId, waitTime) =>
         _fetchWaitTimeSource.add((taskId, waitTime))
+      }
+      metric.recordProcessTimeHistogram.foreach { case (bucket, count) =>
+        _recordProcessTimeHistogram.add((bucket, count))
       }
       metric.remoteReqsDurationByExecutor.foreach { case (executorId, duration) =>
         _remoteReqsDurationByExecutor.add((executorId, duration))
@@ -346,6 +365,7 @@ private[spark] class TempShuffleReadMetrics extends ShuffleReadMetricsReporter {
   private[this] var _localMergedBytesRead = 0L
   private[this] var _remoteReqsDuration = 0L
   private[this] var _remoteMergedReqsDuration = 0L
+  private[this] var _recordsProcessTime = 0L
   private[this] val _shuffleSourceBytes: scala.collection.mutable.Map[Long, Long] =
     scala.collection.mutable.Map.empty[Long, Long].withDefaultValue(0L)
   private[this] val _blocksFetchedSource: scala.collection.mutable.Map[Long, Long] =
@@ -353,6 +373,8 @@ private[spark] class TempShuffleReadMetrics extends ShuffleReadMetricsReporter {
   private[this] val _recordsReadSource: scala.collection.mutable.Map[Long, Long] =
     scala.collection.mutable.Map.empty[Long, Long].withDefaultValue(0L)
   private[this] val _fetchWaitTimeSource: scala.collection.mutable.Map[Long, Long] =
+    scala.collection.mutable.Map.empty[Long, Long].withDefaultValue(0L)
+  private[this] val _recordProcessTimeHistogram: scala.collection.mutable.Map[Long, Long] =
     scala.collection.mutable.Map.empty[Long, Long].withDefaultValue(0L)
   private[this] val _remoteReqsDurationByExecutor: scala.collection.mutable.Map[String, Long] =
     scala.collection.mutable.Map.empty[String, Long].withDefaultValue(0L)
@@ -369,6 +391,12 @@ private[spark] class TempShuffleReadMetrics extends ShuffleReadMetricsReporter {
   }
   override def incFetchWaitTimeSource(sourceTaskId: Long, v: Long): Unit = {
     _fetchWaitTimeSource(sourceTaskId) = _fetchWaitTimeSource.getOrElse(sourceTaskId, 0L) + v
+  }
+  override def incRecordProcessTimeHistogram(bucket: Long, count: Long): Unit = {
+    _recordProcessTimeHistogram.synchronized {
+      _recordProcessTimeHistogram(bucket) =
+        _recordProcessTimeHistogram.getOrElse(bucket, 0L) + count
+    }
   }
   override def incRemoteReqsDurationByExecutor(executorId: String, v: Long): Unit = {
     _remoteReqsDurationByExecutor(executorId) =
@@ -391,6 +419,7 @@ private[spark] class TempShuffleReadMetrics extends ShuffleReadMetricsReporter {
   override def incLocalMergedBytesRead(v: Long): Unit = _localMergedBytesRead += v
   override def incRemoteReqsDuration(v: Long): Unit = _remoteReqsDuration += v
   override def incRemoteMergedReqsDuration(v: Long): Unit = _remoteMergedReqsDuration += v
+  override def incRecordsProcessTime(v: Long): Unit = _recordsProcessTime += v
 
   def remoteBlocksFetched: Long = _remoteBlocksFetched
   def localBlocksFetched: Long = _localBlocksFetched
@@ -409,9 +438,13 @@ private[spark] class TempShuffleReadMetrics extends ShuffleReadMetricsReporter {
   def localMergedBytesRead: Long = _localMergedBytesRead
   def remoteReqsDuration: Long = _remoteReqsDuration
   def remoteMergedReqsDuration: Long = _remoteMergedReqsDuration
+  def recordsProcessTime: Long = _recordsProcessTime
   def shuffleSourceBytes: Map[Long, Long] = _shuffleSourceBytes.toMap
   def blocksFetchedSource: Map[Long, Long] = _blocksFetchedSource.toMap
   def recordsReadSource: Map[Long, Long] = _recordsReadSource.toMap
   def fetchWaitTimeSource: Map[Long, Long] = _fetchWaitTimeSource.toMap
+  def recordProcessTimeHistogram: Map[Long, Long] = _recordProcessTimeHistogram.synchronized {
+    _recordProcessTimeHistogram.toMap
+  }
   def remoteReqsDurationByExecutor: Map[String, Long] = _remoteReqsDurationByExecutor.toMap
 }

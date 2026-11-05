@@ -223,6 +223,7 @@ private[protobuf] class StageDataWrapperSerializer extends ProtobufSerDe[StageDa
       .setLocalBytesRead(srm.localBytesRead)
       .setRecordsRead(srm.recordsRead)
       .setRemoteReqsDuration(srm.remoteReqsDuration)
+      .setRecordsProcessTime(srm.recordsProcessTime)
       .setShufflePushReadMetrics(serializeShufflePushReadMetrics(srm.shufflePushReadMetrics))
     srm.shuffleSourceBytes.foreach { case (taskId, bytes) =>
       builder.putShuffleSourceBytes(taskId, bytes)
@@ -235,6 +236,9 @@ private[protobuf] class StageDataWrapperSerializer extends ProtobufSerDe[StageDa
     }
     srm.fetchWaitTimeSource.foreach { case (taskId, waitTime) =>
       builder.putFetchWaitTimeSource(taskId, waitTime)
+    }
+    srm.recordProcessTimeHistogram.foreach { case (bucket, count) =>
+      builder.putRecordProcessTimeHistogram(bucket, count)
     }
     srm.remoteReqsDurationByExecutor.foreach { case (executorId, duration) =>
       builder.putRemoteReqsDurationByExecutor(executorId, duration)
@@ -703,6 +707,7 @@ private[protobuf] class StageDataWrapperSerializer extends ProtobufSerDe[StageDa
       binary.getLocalBytesRead,
       binary.getRecordsRead,
       binary.getRemoteReqsDuration,
+      binary.getRecordsProcessTime,
       deserializeShufflePushReadMetrics(binary.getShufflePushReadMetrics),
       (Map.empty[Long, Long] ++ binary.getShuffleSourceBytesMap.asScala.map {
         case (k, v) => (k.longValue(), v.longValue())
@@ -714,6 +719,9 @@ private[protobuf] class StageDataWrapperSerializer extends ProtobufSerDe[StageDa
         case (k, v) => (k.longValue(), v.longValue())
       }),
       (Map.empty[Long, Long] ++ binary.getFetchWaitTimeSourceMap.asScala.map {
+        case (k, v) => (k.longValue(), v.longValue())
+      }),
+      (Map.empty[Long, Long] ++ binary.getRecordProcessTimeHistogramMap.asScala.map {
         case (k, v) => (k.longValue(), v.longValue())
       }),
       (Map.empty[String, Long] ++ binary.getRemoteReqsDurationByExecutorMap.asScala.map {

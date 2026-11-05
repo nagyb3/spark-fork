@@ -19,6 +19,7 @@ package org.apache.spark.shuffle
 
 import java.io.{ByteArrayOutputStream, InputStream}
 import java.nio.ByteBuffer
+import java.util.concurrent.TimeUnit
 
 import org.mockito.ArgumentMatchers.{eq => meq}
 import org.mockito.Mockito.{mock, when}
@@ -28,6 +29,7 @@ import org.apache.spark.internal.config
 import org.apache.spark.network.buffer.{ManagedBuffer, NioManagedBuffer}
 import org.apache.spark.serializer.{JavaSerializer, SerializerManager}
 import org.apache.spark.storage.{BlockManager, BlockManagerId, ShuffleBlockId}
+import org.apache.spark.util.ManualClock
 
 /**
  * Wrapper for a managed buffer that keeps track of how many times retain and release are called.
@@ -63,6 +65,7 @@ class BlockStoreShuffleReaderSuite extends SparkFunSuite with LocalSparkContext 
    */
   test("read() releases resources on completion") {
     val testConf = new SparkConf(false)
+      .set(config.SHUFFLE_RECORD_PROCESS_TIME_SAMPLE_INTERVAL, 1)
     // Create a SparkContext as a convenient way of setting SparkEnv (needed because some of the
     // shuffle code calls SparkEnv.get()).
     sc = new SparkContext("local", "test", testConf)
@@ -134,15 +137,22 @@ class BlockStoreShuffleReaderSuite extends SparkFunSuite with LocalSparkContext 
     val metrics = taskContext.taskMetrics.createTempShuffleReadMetrics()
     val blocksByAddress = mapOutputTracker.getMapSizesByExecutorId(
       shuffleId, 0, numMaps, reduceId, reduceId + 1)
+    val clock = new ManualClock()
     val shuffleReader = new BlockStoreShuffleReader(
       shuffleHandle,
       blocksByAddress,
       taskContext,
       metrics,
       serializerManager,
-      blockManager)
+      blockManager,
+      clock = clock)
 
-    assert(shuffleReader.read().length === keyValuePairsPerMap * numMaps)
+    val recordProcessTimeMs = 1L
+    val records = shuffleReader.read().map { record =>
+      clock.advance(recordProcessTimeMs)
+      record
+    }
+    assert(records.length === keyValuePairsPerMap * numMaps)
 
     // Calling .length above will have exhausted the iterator; make sure that exhausting the
     // iterator caused retain and release to be called on each buffer.
@@ -154,5 +164,10 @@ class BlockStoreShuffleReaderSuite extends SparkFunSuite with LocalSparkContext 
     // Every record is attributed to the map task whose block it was read from.
     assert(metrics.recordsReadSource ===
       (0 until numMaps).map(_.toLong -> keyValuePairsPerMap.toLong).toMap)
+    val numRecords = keyValuePairsPerMap * numMaps
+    assert(metrics.recordsProcessTime === numRecords * recordProcessTimeMs)
+    val recordProcessTimeBucket =
+      RecordProcessTimeHistogram.bucket(TimeUnit.MILLISECONDS.toNanos(recordProcessTimeMs))
+    assert(metrics.recordProcessTimeHistogram === Map(recordProcessTimeBucket -> numRecords.toLong))
   }
 }

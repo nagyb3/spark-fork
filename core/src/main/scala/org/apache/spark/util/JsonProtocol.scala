@@ -500,6 +500,8 @@ private[spark] object JsonProtocol extends JsonUtils {
     InternalAccumulator.shuffleRead.BLOCKS_FETCHED_SOURCE,
     InternalAccumulator.shuffleRead.RECORDS_READ_SOURCE,
     InternalAccumulator.shuffleRead.FETCH_WAIT_TIME_SOURCE,
+    InternalAccumulator.shuffleRead.RECORD_PROCESS_TIME_HISTOGRAM,
+    InternalAccumulator.shuffleRead.RECORDS_PROCESS_TIME,
     InternalAccumulator.shuffleRead.REMOTE_REQS_DURATION_BY_EXECUTOR
   )
 

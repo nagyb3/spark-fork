@@ -17,7 +17,10 @@
 
 package org.apache.spark.shuffle
 
+import java.util.concurrent.ThreadLocalRandom
+
 import org.apache.spark.storage.{BlockId, ShuffleBlockBatchId, ShuffleBlockChunkId, ShuffleBlockId}
+import org.apache.spark.util.Clock
 
 /**
  * An interface for reporting shuffle read metrics, for each shuffle. This interface assumes
@@ -38,6 +41,8 @@ private[spark] trait ShuffleReadMetricsReporter {
   private[spark] def incRecordsReadSource(sourceTaskId: Long, records: Long): Unit
   private[spark] def incFetchWaitTime(v: Long): Unit
   private[spark] def incFetchWaitTimeSource(sourceTaskId: Long, v: Long): Unit
+  private[spark] def incRecordProcessTimeHistogram(bucket: Long, count: Long): Unit
+  private[spark] def incRecordsProcessTime(v: Long): Unit
   private[spark] def incRecordsRead(v: Long): Unit
   private[spark] def incCorruptMergedBlockChunks(v: Long): Unit
   private[spark] def incMergedFetchFallbackCount(v: Long): Unit
@@ -63,6 +68,102 @@ private[spark] object ShuffleReadMetricsReporter {
     case b: ShuffleBlockBatchId => Some(b.mapId)
     case c: ShuffleBlockChunkId => Some(c.shuffleMergeId.toLong)
     case _ => None
+  }
+}
+
+private[spark] object RecordProcessTimeHistogram {
+  private val SUB_BUCKET_BITS = 4
+  private val SUB_BUCKETS = 1L << SUB_BUCKET_BITS
+
+  def bucket(nanos: Long): Long = {
+    val value = math.max(nanos, 0L)
+    if (value < SUB_BUCKETS) {
+      value
+    } else {
+      val shift = 63 - java.lang.Long.numberOfLeadingZeros(value) - SUB_BUCKET_BITS
+      shift * SUB_BUCKETS + (value >> shift)
+    }
+  }
+
+  def representativeNanos(bucket: Long): Long = {
+    if (bucket < SUB_BUCKETS * 2) {
+      bucket
+    } else {
+      val shift = (bucket / SUB_BUCKETS - 1).toInt
+      val lowerBound = (bucket % SUB_BUCKETS + SUB_BUCKETS) << shift
+      lowerBound + (1L << shift) / 2
+    }
+  }
+
+  def percentiles(histogram: Map[Long, Long], probabilities: Seq[Double]): Option[Seq[Long]] = {
+    val buckets = histogram.toSeq.filter(_._2 > 0).sortBy(_._1)
+    val total = buckets.map(_._2).sum
+    if (total == 0) {
+      None
+    } else {
+      Some(probabilities.map { probability =>
+        val rank = math.ceil(probability * total).toLong
+        var seen = 0L
+        val (bucket, _) = buckets.find { case (_, count) =>
+          seen += count
+          seen >= rank
+        }.get
+        representativeNanos(bucket)
+      })
+    }
+  }
+}
+
+private[spark] class RecordProcessTimeSampler(
+    sampleInterval: Int,
+    clock: Clock,
+    readMetrics: ShuffleReadMetricsReporter) {
+  private[this] var recordsUntilSample = 1L
+  private[this] var sampleStartTime = -1L
+
+  private def onRecordPull(): Unit = {
+    recordsUntilSample -= 1
+    if (sampleStartTime >= 0 || recordsUntilSample == 0) {
+      val now = clock.nanoTime()
+      if (sampleStartTime >= 0) {
+        readMetrics.incRecordProcessTimeHistogram(
+          RecordProcessTimeHistogram.bucket(now - sampleStartTime), 1L)
+      }
+      if (recordsUntilSample == 0) {
+        sampleStartTime = now
+        recordsUntilSample = ThreadLocalRandom.current().nextLong(1L, 2L * sampleInterval)
+      } else {
+        sampleStartTime = -1L
+      }
+    }
+  }
+
+  private def onBlockExhausted(): Unit = {
+    if (sampleStartTime >= 0) {
+      sampleStartTime = -1L
+      recordsUntilSample = 1L
+    }
+  }
+
+  def wrap[T](records: Iterator[T]): Iterator[T] = new Iterator[T] {
+    private[this] var pullPending = true
+
+    override def hasNext: Boolean = {
+      if (pullPending) {
+        pullPending = false
+        onRecordPull()
+      }
+      val hasMore = records.hasNext
+      if (!hasMore) {
+        onBlockExhausted()
+      }
+      hasMore
+    }
+
+    override def next(): T = {
+      pullPending = true
+      records.next()
+    }
   }
 }
 

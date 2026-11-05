@@ -31,6 +31,7 @@ import org.apache.spark.JobExecutionStatus
 import org.apache.spark.executor.ExecutorMetrics
 import org.apache.spark.metrics.ExecutorMetricType
 import org.apache.spark.resource.{ExecutorResourceRequest, ResourceInformation, TaskResourceRequest}
+import org.apache.spark.shuffle.RecordProcessTimeHistogram
 import org.apache.spark.status.AppStatusUtils.getQuantilesValue
 
 case class ApplicationInfo private[spark](
@@ -382,6 +383,14 @@ class ShuffleSourceMetrics private[spark](
     val recordsReadSource: Long,
     val fetchWaitTimeSource: Long)
 
+class RecordProcessTimePercentiles private[spark](
+    val p50: Long,
+    val p90: Long,
+    val p99: Long)
+
+@JsonIgnoreProperties(
+  value = Array("recordProcessTimeNanosPercentiles", "recordProcessTimeSamples"),
+  allowGetters = true)
 class ShuffleReadMetrics private[spark](
     val remoteBlocksFetched: Long,
     val localBlocksFetched: Long,
@@ -391,6 +400,7 @@ class ShuffleReadMetrics private[spark](
     val localBytesRead: Long,
     val recordsRead: Long,
     val remoteReqsDuration: Long,
+    val recordsProcessTime: Long,
     val shufflePushReadMetrics: ShufflePushReadMetrics,
     @JsonDeserialize(contentAs = classOf[JLong])
     @JsonIgnore
@@ -409,6 +419,10 @@ class ShuffleReadMetrics private[spark](
     @transient
     val fetchWaitTimeSource: Map[Long, Long],
     @JsonDeserialize(contentAs = classOf[JLong])
+    @JsonIgnore
+    @transient
+    val recordProcessTimeHistogram: Map[Long, Long],
+    @JsonDeserialize(contentAs = classOf[JLong])
     val remoteReqsDurationByExecutor: Map[String, Long],
     sourceMetrics0: Map[Long, ShuffleSourceMetrics] = null) {
 
@@ -417,6 +431,15 @@ class ShuffleReadMetrics private[spark](
     if (sourceMetrics0 != null) sourceMetrics0
     else ShuffleReadMetrics.buildSourceMetrics(
       shuffleSourceBytes, blocksFetchedSource, recordsReadSource, fetchWaitTimeSource)
+
+  @JsonProperty("recordProcessTimeNanosPercentiles")
+  def recordProcessTimeNanosPercentiles: Option[RecordProcessTimePercentiles] =
+    RecordProcessTimeHistogram.percentiles(recordProcessTimeHistogram, Seq(0.5, 0.9, 0.99)).map {
+      nanos => new RecordProcessTimePercentiles(nanos(0), nanos(1), nanos(2))
+    }
+
+  @JsonProperty("recordProcessTimeSamples")
+  def recordProcessTimeSamples: Long = recordProcessTimeHistogram.values.sum
 }
 
 object ShuffleReadMetrics {

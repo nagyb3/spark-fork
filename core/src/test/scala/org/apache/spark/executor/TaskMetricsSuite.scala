@@ -196,6 +196,12 @@ class TaskMetricsSuite extends SparkFunSuite {
     sr1.incFetchWaitTimeSource(1L, 1L)
     sr2.incFetchWaitTimeSource(1L, 2L)
     sr3.incFetchWaitTimeSource(2L, 3L)
+    sr1.incRecordProcessTimeHistogram(1L, 4L)
+    sr2.incRecordProcessTimeHistogram(1L, 5L)
+    sr3.incRecordProcessTimeHistogram(2L, 6L)
+    sr1.incRecordsProcessTime(1L)
+    sr2.incRecordsProcessTime(2L)
+    sr3.incRecordsProcessTime(3L)
     sr1.incRemoteReqsDurationByExecutor("exec-1", 5L)
     sr2.incRemoteReqsDurationByExecutor("exec-1", 7L)
     sr3.incRemoteReqsDurationByExecutor("exec-2", 11L)
@@ -207,6 +213,8 @@ class TaskMetricsSuite extends SparkFunSuite {
     assert(tm.shuffleReadMetrics.blocksFetchedSource === Map(1L -> 3L, 2L -> 3L))
     assert(tm.shuffleReadMetrics.recordsReadSource === Map(1L -> 14L, 2L -> 6L))
     assert(tm.shuffleReadMetrics.fetchWaitTimeSource === Map(1L -> 3L, 2L -> 3L))
+    assert(tm.shuffleReadMetrics.recordProcessTimeHistogram === Map(1L -> 9L, 2L -> 6L))
+    assert(tm.shuffleReadMetrics.recordsProcessTime === 6L)
     assert(tm.shuffleReadMetrics.remoteReqsDurationByExecutor ===
       Map("exec-1" -> 12L, "exec-2" -> 11L))
 

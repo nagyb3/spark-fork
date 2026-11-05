@@ -282,8 +282,9 @@ class AppStatusStoreSuite extends SparkFunSuite {
       i, i, i, i, i, i, i, i, i, i,
       i, i, i, i, i, i, i, i, i, i,
       i, i, i, i, i, i, i, i, i, i,
-      i, Map.empty[Long, Long], Map.empty[Long, Long], Map.empty[Long, Long],
-      Map.empty[Long, Long], Map.empty[String, Long], i, i, i, stageId, attemptId
+      i, i, Map.empty[Long, Long], Map.empty[Long, Long], Map.empty[Long, Long],
+      Map.empty[Long, Long], Map.empty[Long, Long], Map.empty[String, Long], i, i, i,
+      stageId, attemptId
     )
   }
 

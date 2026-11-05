@@ -101,6 +101,12 @@ class SQLShuffleReadMetricsReporter(
   override def incFetchWaitTimeSource(sourceTaskId: Long, v: Long): Unit = {
     tempMetrics.incFetchWaitTimeSource(sourceTaskId, v)
   }
+  override def incRecordProcessTimeHistogram(bucket: Long, count: Long): Unit = {
+    tempMetrics.incRecordProcessTimeHistogram(bucket, count)
+  }
+  override def incRecordsProcessTime(v: Long): Unit = {
+    tempMetrics.incRecordsProcessTime(v)
+  }
   override def incRecordsRead(v: Long): Unit = {
     _recordsRead.add(v)
     tempMetrics.incRecordsRead(v)

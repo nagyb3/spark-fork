@@ -71,6 +71,8 @@ private[spark] object InternalAccumulator {
     val BLOCKS_FETCHED_SOURCE = SHUFFLE_READ_METRICS_PREFIX + "blocksFetchedSource"
     val RECORDS_READ_SOURCE = SHUFFLE_READ_METRICS_PREFIX + "recordsReadSource"
     val FETCH_WAIT_TIME_SOURCE = SHUFFLE_READ_METRICS_PREFIX + "fetchWaitTimeSource"
+    val RECORD_PROCESS_TIME_HISTOGRAM = SHUFFLE_READ_METRICS_PREFIX + "recordProcessTimeHistogram"
+    val RECORDS_PROCESS_TIME = SHUFFLE_READ_METRICS_PREFIX + "recordsProcessTime"
     val REMOTE_REQS_DURATION_BY_EXECUTOR =
       SHUFFLE_READ_METRICS_PREFIX + "remoteReqsDurationByExecutor"
   }

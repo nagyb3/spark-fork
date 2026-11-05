@@ -179,10 +179,12 @@ class KVStoreProtobufSerializerSuite extends SparkFunSuite {
         shuffleMergedLocalBytesRead = 35L,
         shuffleRemoteReqsDuration = 36L,
         shuffleMergedRemoteReqDuration = 37L,
+        shuffleRecordsProcessTime = 41L,
         shuffleSourceBytes = Map(137L -> 500L),
         blocksFetchedSource = Map(137L -> 2L),
         recordsReadSource = Map(137L -> 20L),
         fetchWaitTimeSource = Map(137L -> 9L),
+        recordProcessTimeHistogram = Map(137L -> 15L),
         remoteReqsDurationByExecutor = Map("exec-1" -> 12L),
         shuffleBytesWritten = 38L,
         shuffleWriteTime = 39L,
@@ -242,6 +244,8 @@ class KVStoreProtobufSerializerSuite extends SparkFunSuite {
       assert(result.blocksFetchedSource == input.blocksFetchedSource)
       assert(result.recordsReadSource == input.recordsReadSource)
       assert(result.fetchWaitTimeSource == input.fetchWaitTimeSource)
+      assert(result.recordProcessTimeHistogram == input.recordProcessTimeHistogram)
+      assert(result.shuffleRecordsProcessTime == input.shuffleRecordsProcessTime)
       assert(result.remoteReqsDurationByExecutor == input.remoteReqsDurationByExecutor)
       assert(result.shuffleBytesWritten == input.shuffleBytesWritten)
       assert(result.shuffleWriteTime == input.shuffleWriteTime)
@@ -1056,11 +1060,13 @@ class KVStoreProtobufSerializerSuite extends SparkFunSuite {
       localBytesRead = 6L,
       recordsRead = 7L,
       remoteReqsDuration = 8L,
+      recordsProcessTime = 9L,
       shufflePushReadMetrics = shufflePushReadMetrics,
       shuffleSourceBytes = Map(100L -> 108L),
       blocksFetchedSource = Map(100L -> 1L),
       recordsReadSource = Map(100L -> 7L),
       fetchWaitTimeSource = Map(100L -> 3L),
+      recordProcessTimeHistogram = Map(100L -> 5L),
       remoteReqsDurationByExecutor = Map("exec-1" -> 8L)
     )
     val shuffleWriteMetrics = new ShuffleWriteMetrics(
@@ -1506,6 +1512,8 @@ class KVStoreProtobufSerializerSuite extends SparkFunSuite {
     assert(result.blocksFetchedSource == expected.blocksFetchedSource)
     assert(result.recordsReadSource == expected.recordsReadSource)
     assert(result.fetchWaitTimeSource == expected.fetchWaitTimeSource)
+    assert(result.recordProcessTimeHistogram == expected.recordProcessTimeHistogram)
+    assert(result.recordsProcessTime == expected.recordsProcessTime)
     assert(result.remoteReqsDurationByExecutor == expected.remoteReqsDurationByExecutor)
   }
 
