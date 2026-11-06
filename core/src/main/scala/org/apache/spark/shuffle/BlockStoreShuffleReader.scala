@@ -17,6 +17,8 @@
 
 package org.apache.spark.shuffle
 
+import java.util.concurrent.TimeUnit
+
 import scala.collection
 
 import org.apache.spark._
@@ -24,7 +26,7 @@ import org.apache.spark.internal.{config, Logging}
 import org.apache.spark.io.CompressionCodec
 import org.apache.spark.serializer.SerializerManager
 import org.apache.spark.storage.{BlockId, BlockManager, BlockManagerId, ShuffleBlockFetcherIterator}
-import org.apache.spark.util.CompletionIterator
+import org.apache.spark.util.{Clock, CompletionIterator, SystemClock}
 import org.apache.spark.util.collection.ExternalSorter
 
 /**
@@ -38,7 +40,8 @@ private[spark] class BlockStoreShuffleReader[K, C](
     serializerManager: SerializerManager = SparkEnv.get.serializerManager,
     blockManager: BlockManager = SparkEnv.get.blockManager,
     mapOutputTracker: MapOutputTracker = SparkEnv.get.mapOutputTracker,
-    shouldBatchFetch: Boolean = false)
+    shouldBatchFetch: Boolean = false,
+    clock: Clock = new SystemClock())
   extends ShuffleReader[K, C] with Logging {
 
   private val dep = handle.dependency
@@ -88,22 +91,46 @@ private[spark] class BlockStoreShuffleReader[K, C](
       SparkEnv.get.conf.get(config.SHUFFLE_CHECKSUM_ENABLED),
       SparkEnv.get.conf.get(config.SHUFFLE_CHECKSUM_ALGORITHM),
       readMetrics,
-      fetchContinuousBlocksInBatch).toCompletionIterator
+      fetchContinuousBlocksInBatch,
+      clock).toCompletionIterator
 
     val serializerInstance = dep.serializer.newInstance()
 
+    val recordProcessTimeSampler = new RecordProcessTimeSampler(
+      SparkEnv.get.conf.get(config.SHUFFLE_RECORD_PROCESS_TIME_SAMPLE_INTERVAL), clock, readMetrics)
+    var recordsProcessTimeNanos = 0L
+    var reportedRecordsProcessTimeMs = 0L
+
+    // Records read from the current block are counted locally and reported per source task
+    // once the block is done, so that the per-record path doesn't update a map.
+    var currentSourceRecordsRead = 0L
+
     // Create a key/value iterator for each stream
     val recordIter = wrappedStreams.flatMap { case (blockId, wrappedStream) =>
+      val sourceTaskId = ShuffleReadMetricsReporter.sourceTaskId(blockId)
+      val processStartTime = clock.nanoTime()
       // Note: the asKeyValueIterator below wraps a key/value iterator inside of a
       // NextIterator. The NextIterator makes sure that close() is called on the
       // underlying InputStream when all records have been read.
-      serializerInstance.deserializeStream(wrappedStream).asKeyValueIterator
+      val blockRecordIter = serializerInstance.deserializeStream(wrappedStream).asKeyValueIterator
+      CompletionIterator[(Any, Any), Iterator[(Any, Any)]](
+        recordProcessTimeSampler.wrap(blockRecordIter), {
+          if (currentSourceRecordsRead > 0) {
+            sourceTaskId.foreach(readMetrics.incRecordsReadSource(_, currentSourceRecordsRead))
+          }
+          currentSourceRecordsRead = 0L
+          recordsProcessTimeNanos += clock.nanoTime() - processStartTime
+          val recordsProcessTimeMs = TimeUnit.NANOSECONDS.toMillis(recordsProcessTimeNanos)
+          readMetrics.incRecordsProcessTime(recordsProcessTimeMs - reportedRecordsProcessTimeMs)
+          reportedRecordsProcessTimeMs = recordsProcessTimeMs
+        })
     }
 
     // Update the context task metrics for each record read.
     val metricIter = CompletionIterator[(Any, Any), Iterator[(Any, Any)]](
       recordIter.map { record =>
         readMetrics.incRecordsRead(1)
+        currentSourceRecordsRead += 1
         record
       },
       context.taskMetrics().mergeShuffleReadMetrics())

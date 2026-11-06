@@ -272,9 +272,15 @@ class TaskMetrics private[spark] () extends Serializable {
     output.BYTES_WRITTEN -> outputMetrics._bytesWritten,
     output.RECORDS_WRITTEN -> outputMetrics._recordsWritten
   ) ++ testAccum.map(TEST_ACCUM -> _) ++
-    Seq(
+    Seq[(String, AccumulatorV2[_, _])](
       shuffleRead.SHUFFLE_SOURCE_BYTES -> shuffleReadMetrics._shuffleSourceBytes,
-      shuffleRead.BLOCKS_FETCHED_SOURCE -> shuffleReadMetrics._blocksFetchedSource)
+      shuffleRead.BLOCKS_FETCHED_SOURCE -> shuffleReadMetrics._blocksFetchedSource,
+      shuffleRead.RECORDS_READ_SOURCE -> shuffleReadMetrics._recordsReadSource,
+      shuffleRead.FETCH_WAIT_TIME_SOURCE -> shuffleReadMetrics._fetchWaitTimeSource,
+      shuffleRead.RECORD_PROCESS_TIME_HISTOGRAM -> shuffleReadMetrics._recordProcessTimeHistogram,
+      shuffleRead.RECORDS_PROCESS_TIME -> shuffleReadMetrics._recordsProcessTime,
+      shuffleRead.REMOTE_REQS_DURATION_BY_EXECUTOR ->
+        shuffleReadMetrics._remoteReqsDurationByExecutor)
 
   @transient private[spark] lazy val internalAccums: Seq[AccumulatorV2[_, _]] =
     nameToAccums.values.toIndexedSeq
@@ -379,6 +385,18 @@ private[spark] object TaskMetrics extends Logging {
       } else if (name == shuffleRead.BLOCKS_FETCHED_SOURCE) {
         tm.shuffleReadMetrics._blocksFetchedSource
           .setValue(value.asInstanceOf[java.util.List[(Long, Long)]])
+      } else if (name == shuffleRead.RECORDS_READ_SOURCE) {
+        tm.shuffleReadMetrics._recordsReadSource
+          .setValue(value.asInstanceOf[java.util.List[(Long, Long)]])
+      } else if (name == shuffleRead.FETCH_WAIT_TIME_SOURCE) {
+        tm.shuffleReadMetrics._fetchWaitTimeSource
+          .setValue(value.asInstanceOf[java.util.List[(Long, Long)]])
+      } else if (name == shuffleRead.RECORD_PROCESS_TIME_HISTOGRAM) {
+        tm.shuffleReadMetrics._recordProcessTimeHistogram
+          .setValue(value.asInstanceOf[java.util.List[(Long, Long)]])
+      } else if (name == shuffleRead.REMOTE_REQS_DURATION_BY_EXECUTOR) {
+        tm.shuffleReadMetrics._remoteReqsDurationByExecutor
+          .setValue(value.asInstanceOf[java.util.List[(String, Long)]])
       } else {
         tm.nameToAccums.get(name).foreach(
           _.asInstanceOf[LongAccumulator].setValue(value.asInstanceOf[Long])

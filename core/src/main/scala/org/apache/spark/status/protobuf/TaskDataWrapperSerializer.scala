@@ -67,6 +67,7 @@ private[protobuf] class TaskDataWrapperSerializer extends ProtobufSerDe[TaskData
       .setShuffleMergedLocalBytesRead(input.shuffleMergedLocalBytesRead)
       .setShuffleRemoteReqsDuration(input.shuffleRemoteReqsDuration)
       .setShuffleMergedRemoteReqDuration(input.shuffleMergedRemoteReqDuration)
+      .setShuffleRecordsProcessTime(input.shuffleRecordsProcessTime)
       .setShuffleBytesWritten(input.shuffleBytesWritten)
       .setShuffleWriteTime(input.shuffleWriteTime)
       .setShuffleRecordsWritten(input.shuffleRecordsWritten)
@@ -85,6 +86,18 @@ private[protobuf] class TaskDataWrapperSerializer extends ProtobufSerDe[TaskData
     }
     input.blocksFetchedSource.foreach { case (taskId, blocks) =>
       builder.putBlocksFetchedSource(taskId, blocks)
+    }
+    input.recordsReadSource.foreach { case (taskId, records) =>
+      builder.putRecordsReadSource(taskId, records)
+    }
+    input.fetchWaitTimeSource.foreach { case (taskId, waitTime) =>
+      builder.putFetchWaitTimeSource(taskId, waitTime)
+    }
+    input.recordProcessTimeHistogram.foreach { case (bucket, count) =>
+      builder.putRecordProcessTimeHistogram(bucket, count)
+    }
+    input.remoteReqsDurationByExecutor.foreach { case (executorId, duration) =>
+      builder.putRemoteReqsDurationByExecutor(executorId, duration)
     }
     builder.build().toByteArray
   }
@@ -140,12 +153,29 @@ private[protobuf] class TaskDataWrapperSerializer extends ProtobufSerDe[TaskData
       shuffleMergedLocalBytesRead = binary.getShuffleMergedLocalBytesRead,
       shuffleRemoteReqsDuration = binary.getShuffleRemoteReqsDuration,
       shuffleMergedRemoteReqDuration = binary.getShuffleMergedRemoteReqDuration,
+      shuffleRecordsProcessTime = binary.getShuffleRecordsProcessTime,
       shuffleSourceBytes = (Map.empty[Long, Long] ++ binary.getShuffleSourceBytesMap.asScala.map {
         case (k, v) => (k.longValue(), v.longValue())
       }),
       blocksFetchedSource =
         (Map.empty[Long, Long] ++ binary.getBlocksFetchedSourceMap.asScala.map {
           case (k, v) => (k.longValue(), v.longValue())
+        }),
+      recordsReadSource =
+        (Map.empty[Long, Long] ++ binary.getRecordsReadSourceMap.asScala.map {
+          case (k, v) => (k.longValue(), v.longValue())
+        }),
+      fetchWaitTimeSource =
+        (Map.empty[Long, Long] ++ binary.getFetchWaitTimeSourceMap.asScala.map {
+          case (k, v) => (k.longValue(), v.longValue())
+        }),
+      recordProcessTimeHistogram =
+        (Map.empty[Long, Long] ++ binary.getRecordProcessTimeHistogramMap.asScala.map {
+          case (k, v) => (k.longValue(), v.longValue())
+        }),
+      remoteReqsDurationByExecutor =
+        (Map.empty[String, Long] ++ binary.getRemoteReqsDurationByExecutorMap.asScala.map {
+          case (k, v) => (k, v.longValue())
         }),
       shuffleBytesWritten = binary.getShuffleBytesWritten,
       shuffleWriteTime = binary.getShuffleWriteTime,

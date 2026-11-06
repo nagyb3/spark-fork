@@ -91,9 +91,21 @@ class SQLShuffleReadMetricsReporter(
   override def incBlocksFetchedSource(sourceTaskId: Long, blocks: Long): Unit = {
     tempMetrics.incBlocksFetchedSource(sourceTaskId, blocks)
   }
+  override def incRecordsReadSource(sourceTaskId: Long, records: Long): Unit = {
+    tempMetrics.incRecordsReadSource(sourceTaskId, records)
+  }
   override def incFetchWaitTime(v: Long): Unit = {
     _fetchWaitTime.add(v)
     tempMetrics.incFetchWaitTime(v)
+  }
+  override def incFetchWaitTimeSource(sourceTaskId: Long, v: Long): Unit = {
+    tempMetrics.incFetchWaitTimeSource(sourceTaskId, v)
+  }
+  override def incRecordProcessTimeHistogram(bucket: Long, count: Long): Unit = {
+    tempMetrics.incRecordProcessTimeHistogram(bucket, count)
+  }
+  override def incRecordsProcessTime(v: Long): Unit = {
+    tempMetrics.incRecordsProcessTime(v)
   }
   override def incRecordsRead(v: Long): Unit = {
     _recordsRead.add(v)
@@ -134,6 +146,9 @@ class SQLShuffleReadMetricsReporter(
   override def incRemoteReqsDuration(v: Long): Unit = {
     _remoteReqsDuration.add(v)
     tempMetrics.incRemoteReqsDuration(v)
+  }
+  override def incRemoteReqsDurationByExecutor(executorId: String, v: Long): Unit = {
+    tempMetrics.incRemoteReqsDurationByExecutor(executorId, v)
   }
   override def incRemoteMergedReqsDuration(v: Long): Unit = {
     _remoteMergedReqsDuration.add(v)

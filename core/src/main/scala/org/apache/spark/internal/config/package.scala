@@ -1798,6 +1798,16 @@ package object config {
       .booleanConf
       .createWithDefault(false)
 
+  private[spark] val SHUFFLE_RECORD_PROCESS_TIME_SAMPLE_INTERVAL =
+    ConfigBuilder("spark.shuffle.recordProcessTime.sampleInterval")
+      .internal()
+      .doc("On average, one in this many shuffle records read by a task is timed, at random " +
+        "positions, to estimate the percentiles of the record process time.")
+      .version("4.2.0")
+      .intConf
+      .checkValue(_ > 0, "The sample interval must be positive.")
+      .createWithDefault(100)
+
   private[spark] val SHUFFLE_SYNC =
     ConfigBuilder("spark.shuffle.sync")
       .doc("Whether to force outstanding writes to disk.")
