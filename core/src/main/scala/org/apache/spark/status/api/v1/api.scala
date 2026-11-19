@@ -31,6 +31,7 @@ import org.apache.spark.JobExecutionStatus
 import org.apache.spark.executor.ExecutorMetrics
 import org.apache.spark.metrics.ExecutorMetricType
 import org.apache.spark.resource.{ExecutorResourceRequest, ResourceInformation, TaskResourceRequest}
+import org.apache.spark.shuffle.RecordProcessTimeHistogram
 import org.apache.spark.status.AppStatusUtils.getQuantilesValue
 
 case class ApplicationInfo private[spark](
@@ -378,8 +379,18 @@ class ShufflePushReadMetrics private[spark](
 
 class ShuffleSourceMetrics private[spark](
     val shuffleSourceBytes: Long,
-    val blocksFetchedSource: Long)
+    val blocksFetchedSource: Long,
+    val recordsReadSource: Long,
+    val fetchWaitTimeSource: Long)
 
+class RecordProcessTimePercentiles private[spark](
+    val p50: Long,
+    val p90: Long,
+    val p99: Long)
+
+@JsonIgnoreProperties(
+  value = Array("recordProcessTimeNanosPercentiles", "recordProcessTimeSamples"),
+  allowGetters = true)
 class ShuffleReadMetrics private[spark](
     val remoteBlocksFetched: Long,
     val localBlocksFetched: Long,
@@ -389,6 +400,7 @@ class ShuffleReadMetrics private[spark](
     val localBytesRead: Long,
     val recordsRead: Long,
     val remoteReqsDuration: Long,
+    val recordsProcessTime: Long,
     val shufflePushReadMetrics: ShufflePushReadMetrics,
     @JsonDeserialize(contentAs = classOf[JLong])
     @JsonIgnore
@@ -398,22 +410,61 @@ class ShuffleReadMetrics private[spark](
     @JsonIgnore
     @transient
     val blocksFetchedSource: Map[Long, Long],
-    sourceMetrics0: Map[Long, ShuffleSourceMetrics] = null) {
+    @JsonDeserialize(contentAs = classOf[JLong])
+    @JsonIgnore
+    @transient
+    val recordsReadSource: Map[Long, Long],
+    @JsonDeserialize(contentAs = classOf[JLong])
+    @JsonIgnore
+    @transient
+    val fetchWaitTimeSource: Map[Long, Long],
+    @JsonDeserialize(contentAs = classOf[JLong])
+    @JsonIgnore
+    @transient
+    val recordProcessTimeHistogram: Map[Long, Long],
+    @JsonDeserialize(contentAs = classOf[JLong])
+    val remoteReqsDurationByExecutor: Map[String, Long],
+    sourceMetrics0: Map[Long, ShuffleSourceMetrics] = null,
+    recordProcessTimeSummary0: (Long, Seq[Long]) = null) {
 
   @JsonProperty("sourceMetrics")
   val sourceMetrics: Map[Long, ShuffleSourceMetrics] =
     if (sourceMetrics0 != null) sourceMetrics0
-    else ShuffleReadMetrics.buildSourceMetrics(shuffleSourceBytes, blocksFetchedSource)
+    else ShuffleReadMetrics.buildSourceMetrics(
+      shuffleSourceBytes, blocksFetchedSource, recordsReadSource, fetchWaitTimeSource)
+
+  /**
+   * The number of samples and the percentiles: precomputed for the tasks in the status store,
+   * which keep no histogram, and computed from the histogram otherwise (e.g. for stages).
+   */
+  private def recordProcessTimeSummary: (Long, Seq[Long]) =
+    if (recordProcessTimeSummary0 != null) recordProcessTimeSummary0
+    else RecordProcessTimeHistogram.summarize(recordProcessTimeHistogram)
+
+  @JsonProperty("recordProcessTimeNanosPercentiles")
+  def recordProcessTimeNanosPercentiles: Option[RecordProcessTimePercentiles] = {
+    val nanos = recordProcessTimeSummary._2
+    if (nanos.isEmpty) None
+    else Some(new RecordProcessTimePercentiles(nanos(0), nanos(1), nanos(2)))
+  }
+
+  @JsonProperty("recordProcessTimeSamples")
+  def recordProcessTimeSamples: Long = recordProcessTimeSummary._1
 }
 
 object ShuffleReadMetrics {
-  private[api] def buildSourceMetrics(
+  private[spark] def buildSourceMetrics(
       shuffleSourceBytes: Map[Long, Long],
-      blocksFetchedSource: Map[Long, Long]): Map[Long, ShuffleSourceMetrics] = {
-    (shuffleSourceBytes.keySet ++ blocksFetchedSource.keySet).map { sourceTaskId =>
+      blocksFetchedSource: Map[Long, Long],
+      recordsReadSource: Map[Long, Long],
+      fetchWaitTimeSource: Map[Long, Long]): Map[Long, ShuffleSourceMetrics] = {
+    (shuffleSourceBytes.keySet ++ blocksFetchedSource.keySet ++ recordsReadSource.keySet ++
+      fetchWaitTimeSource.keySet).map { sourceTaskId =>
       sourceTaskId -> new ShuffleSourceMetrics(
         shuffleSourceBytes.getOrElse(sourceTaskId, 0L),
-        blocksFetchedSource.getOrElse(sourceTaskId, 0L))
+        blocksFetchedSource.getOrElse(sourceTaskId, 0L),
+        recordsReadSource.getOrElse(sourceTaskId, 0L),
+        fetchWaitTimeSource.getOrElse(sourceTaskId, 0L))
     }.toMap
   }
 }

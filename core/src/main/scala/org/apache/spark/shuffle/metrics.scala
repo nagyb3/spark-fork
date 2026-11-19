@@ -17,6 +17,11 @@
 
 package org.apache.spark.shuffle
 
+import java.util.concurrent.ThreadLocalRandom
+
+import org.apache.spark.storage.{BlockId, ShuffleBlockBatchId, ShuffleBlockChunkId, ShuffleBlockId}
+import org.apache.spark.util.Clock
+
 /**
  * An interface for reporting shuffle read metrics, for each shuffle. This interface assumes
  * all the methods are called on a single-threaded, i.e. concrete implementations would not need
@@ -33,7 +38,11 @@ private[spark] trait ShuffleReadMetricsReporter {
   private[spark] def incLocalBytesRead(v: Long): Unit
   private[spark] def incShuffleSourceBytes(sourceTaskId: Long, bytes: Long): Unit
   private[spark] def incBlocksFetchedSource(sourceTaskId: Long, blocks: Long): Unit
+  private[spark] def incRecordsReadSource(sourceTaskId: Long, records: Long): Unit
   private[spark] def incFetchWaitTime(v: Long): Unit
+  private[spark] def incFetchWaitTimeSource(sourceTaskId: Long, v: Long): Unit
+  private[spark] def incRecordProcessTimeHistogram(bucket: Long, count: Long): Unit
+  private[spark] def incRecordsProcessTime(v: Long): Unit
   private[spark] def incRecordsRead(v: Long): Unit
   private[spark] def incCorruptMergedBlockChunks(v: Long): Unit
   private[spark] def incMergedFetchFallbackCount(v: Long): Unit
@@ -44,9 +53,129 @@ private[spark] trait ShuffleReadMetricsReporter {
   private[spark] def incRemoteMergedBytesRead(v: Long): Unit
   private[spark] def incLocalMergedBytesRead(v: Long): Unit
   private[spark] def incRemoteReqsDuration(v: Long): Unit
+  private[spark] def incRemoteReqsDurationByExecutor(executorId: String, v: Long): Unit
   private[spark] def incRemoteMergedReqsDuration(v: Long): Unit
 }
 
+private[spark] object ShuffleReadMetricsReporter {
+
+  /**
+   * The source task ID that a shuffle block is attributed to in the per-source shuffle read
+   * metrics, or None for blocks that are not attributed to a source.
+   */
+  def sourceTaskId(blockId: BlockId): Option[Long] = blockId match {
+    case s: ShuffleBlockId => Some(s.mapId)
+    case b: ShuffleBlockBatchId => Some(b.mapId)
+    case c: ShuffleBlockChunkId => Some(c.shuffleMergeId.toLong)
+    case _ => None
+  }
+}
+
+private[spark] object RecordProcessTimeHistogram {
+  private val SUB_BUCKET_BITS = 4
+  private val SUB_BUCKETS = 1L << SUB_BUCKET_BITS
+
+  def bucket(nanos: Long): Long = {
+    val value = math.max(nanos, 0L)
+    if (value < SUB_BUCKETS) {
+      value
+    } else {
+      val shift = 63 - java.lang.Long.numberOfLeadingZeros(value) - SUB_BUCKET_BITS
+      shift * SUB_BUCKETS + (value >> shift)
+    }
+  }
+
+  def representativeNanos(bucket: Long): Long = {
+    if (bucket < SUB_BUCKETS * 2) {
+      bucket
+    } else {
+      val shift = (bucket / SUB_BUCKETS - 1).toInt
+      val lowerBound = (bucket % SUB_BUCKETS + SUB_BUCKETS) << shift
+      lowerBound + (1L << shift) / 2
+    }
+  }
+
+  def percentiles(histogram: Map[Long, Long], probabilities: Seq[Double]): Option[Seq[Long]] = {
+    val buckets = histogram.iterator.filter(_._2 > 0).map(_._1).toArray
+    java.util.Arrays.sort(buckets)
+    val counts = buckets.map(histogram)
+    val total = counts.sum
+    if (total == 0) {
+      None
+    } else {
+      Some(probabilities.map { probability =>
+        val rank = math.ceil(probability * total).toLong
+        var i = 0
+        var seen = counts(0)
+        while (seen < rank) {
+          i += 1
+          seen += counts(i)
+        }
+        representativeNanos(buckets(i))
+      })
+    }
+  }
+
+  /** The percentiles that the REST API reports per task and stage. */
+  val REPORTED_PERCENTILES: Seq[Double] = Seq(0.5, 0.9, 0.99)
+
+  /**
+   * The number of samples and the [[REPORTED_PERCENTILES]] of a histogram, empty if it has no
+   * samples: what the status store keeps per task instead of the histogram.
+   */
+  def summarize(histogram: Map[Long, Long]): (Long, Seq[Long]) = {
+    val samples = histogram.valuesIterator.sum
+    (samples, percentiles(histogram, REPORTED_PERCENTILES).getOrElse(Nil))
+  }
+}
+
+/**
+ * Times about one in `sampleInterval` records read by a task, at random positions, into the
+ * record process time histogram. A sample is the time from handing a record to the task until
+ * the task asks for the next one, or until the block it came from turns out to be exhausted, so
+ * that waiting for the next block is not part of any record.
+ *
+ * The shuffle reader calls [[recordDelivered]] and [[blockFinished]] from the code it already
+ * runs per record and per block, rather than wrapping every block's iterator, as an extra
+ * iterator layer per record costs more than the sampling itself.
+ */
+private[spark] class RecordProcessTimeSampler(
+    sampleInterval: Int,
+    clock: Clock,
+    readMetrics: ShuffleReadMetricsReporter) {
+  private[this] var recordsUntilSample = 1L
+  private[this] var sampleStartTime = -1L
+
+  /** Called after a record has been read, before the task processes it. */
+  def recordDelivered(): Unit = {
+    recordsUntilSample -= 1
+    if (sampleStartTime >= 0 || recordsUntilSample == 0) {
+      val now = clock.nanoTime()
+      if (sampleStartTime >= 0) {
+        readMetrics.incRecordProcessTimeHistogram(
+          RecordProcessTimeHistogram.bucket(now - sampleStartTime), 1L)
+      }
+      if (recordsUntilSample == 0) {
+        sampleStartTime = now
+        recordsUntilSample = ThreadLocalRandom.current().nextLong(1L, 2L * sampleInterval)
+      } else {
+        sampleStartTime = -1L
+      }
+    }
+  }
+
+  /**
+   * Called when the task asks for a record after the last one of a block, at `now`, before
+   * waiting for the next block: ends the sample of that last record.
+   */
+  def blockFinished(now: Long): Unit = {
+    if (sampleStartTime >= 0) {
+      readMetrics.incRecordProcessTimeHistogram(
+        RecordProcessTimeHistogram.bucket(now - sampleStartTime), 1L)
+      sampleStartTime = -1L
+    }
+  }
+}
 
 /**
  * An interface for reporting shuffle write metrics. This interface assumes all the methods are

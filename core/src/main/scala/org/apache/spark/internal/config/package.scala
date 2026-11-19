@@ -1798,6 +1798,27 @@ package object config {
       .booleanConf
       .createWithDefault(false)
 
+  private[spark] val SHUFFLE_RECORD_PROCESS_TIME_ENABLED =
+    ConfigBuilder("spark.shuffle.recordProcessTime.enabled")
+      .internal()
+      .doc("Whether to measure the time spent processing the shuffle records read by a task, " +
+        "reported as recordsProcessTime and recordProcessTimeNanosPercentiles. When disabled, " +
+        "these metrics stay empty and the shuffle read path does no extra timing work.")
+      .version("4.2.0")
+      .booleanConf
+      .createWithDefault(true)
+
+  private[spark] val SHUFFLE_RECORD_PROCESS_TIME_SAMPLE_INTERVAL =
+    ConfigBuilder("spark.shuffle.recordProcessTime.sampleInterval")
+      .internal()
+      .doc("On average, one in this many shuffle records read by a task is timed, at random " +
+        "positions, to estimate the percentiles of the record process time. 0 disables the " +
+        "sampling: recordsProcessTime is still measured, but there are no percentiles.")
+      .version("4.2.0")
+      .intConf
+      .checkValue(_ >= 0, "The sample interval must not be negative.")
+      .createWithDefault(100)
+
   private[spark] val SHUFFLE_SYNC =
     ConfigBuilder("spark.shuffle.sync")
       .doc("Whether to force outstanding writes to disk.")
