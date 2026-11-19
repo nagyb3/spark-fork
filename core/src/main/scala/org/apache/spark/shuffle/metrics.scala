@@ -96,24 +96,49 @@ private[spark] object RecordProcessTimeHistogram {
   }
 
   def percentiles(histogram: Map[Long, Long], probabilities: Seq[Double]): Option[Seq[Long]] = {
-    val buckets = histogram.toSeq.filter(_._2 > 0).sortBy(_._1)
-    val total = buckets.map(_._2).sum
+    val buckets = histogram.iterator.filter(_._2 > 0).map(_._1).toArray
+    java.util.Arrays.sort(buckets)
+    val counts = buckets.map(histogram)
+    val total = counts.sum
     if (total == 0) {
       None
     } else {
       Some(probabilities.map { probability =>
         val rank = math.ceil(probability * total).toLong
-        var seen = 0L
-        val (bucket, _) = buckets.find { case (_, count) =>
-          seen += count
-          seen >= rank
-        }.get
-        representativeNanos(bucket)
+        var i = 0
+        var seen = counts(0)
+        while (seen < rank) {
+          i += 1
+          seen += counts(i)
+        }
+        representativeNanos(buckets(i))
       })
     }
   }
+
+  /** The percentiles that the REST API reports per task and stage. */
+  val REPORTED_PERCENTILES: Seq[Double] = Seq(0.5, 0.9, 0.99)
+
+  /**
+   * The number of samples and the [[REPORTED_PERCENTILES]] of a histogram, empty if it has no
+   * samples: what the status store keeps per task instead of the histogram.
+   */
+  def summarize(histogram: Map[Long, Long]): (Long, Seq[Long]) = {
+    val samples = histogram.valuesIterator.sum
+    (samples, percentiles(histogram, REPORTED_PERCENTILES).getOrElse(Nil))
+  }
 }
 
+/**
+ * Times about one in `sampleInterval` records read by a task, at random positions, into the
+ * record process time histogram. A sample is the time from handing a record to the task until
+ * the task asks for the next one, or until the block it came from turns out to be exhausted, so
+ * that waiting for the next block is not part of any record.
+ *
+ * The shuffle reader calls [[recordDelivered]] and [[blockFinished]] from the code it already
+ * runs per record and per block, rather than wrapping every block's iterator, as an extra
+ * iterator layer per record costs more than the sampling itself.
+ */
 private[spark] class RecordProcessTimeSampler(
     sampleInterval: Int,
     clock: Clock,
@@ -121,7 +146,8 @@ private[spark] class RecordProcessTimeSampler(
   private[this] var recordsUntilSample = 1L
   private[this] var sampleStartTime = -1L
 
-  private def onRecordPull(): Unit = {
+  /** Called after a record has been read, before the task processes it. */
+  def recordDelivered(): Unit = {
     recordsUntilSample -= 1
     if (sampleStartTime >= 0 || recordsUntilSample == 0) {
       val now = clock.nanoTime()
@@ -138,35 +164,18 @@ private[spark] class RecordProcessTimeSampler(
     }
   }
 
-  private def onBlockExhausted(): Unit = {
+  /**
+   * Called when the task asks for a record after the last one of a block, at `now`, before
+   * waiting for the next block: ends the sample of that last record.
+   */
+  def blockFinished(now: Long): Unit = {
     if (sampleStartTime >= 0) {
+      readMetrics.incRecordProcessTimeHistogram(
+        RecordProcessTimeHistogram.bucket(now - sampleStartTime), 1L)
       sampleStartTime = -1L
-      recordsUntilSample = 1L
-    }
-  }
-
-  def wrap[T](records: Iterator[T]): Iterator[T] = new Iterator[T] {
-    private[this] var pullPending = true
-
-    override def hasNext: Boolean = {
-      if (pullPending) {
-        pullPending = false
-        onRecordPull()
-      }
-      val hasMore = records.hasNext
-      if (!hasMore) {
-        onBlockExhausted()
-      }
-      hasMore
-    }
-
-    override def next(): T = {
-      pullPending = true
-      records.next()
     }
   }
 }
-
 
 /**
  * An interface for reporting shuffle write metrics. This interface assumes all the methods are

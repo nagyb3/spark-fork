@@ -17,11 +17,12 @@
 
 package org.apache.spark.executor
 
+import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.shuffle.ShuffleReadMetricsReporter
-import org.apache.spark.util.{CollectionAccumulator, LongAccumulator}
+import org.apache.spark.util.{AccumulatorV2, CollectionAccumulator, LongAccumulator}
 
 
 /**
@@ -53,7 +54,7 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
   private[executor] val _blocksFetchedSource = new CollectionAccumulator[(Long, Long)]
   private[executor] val _recordsReadSource = new CollectionAccumulator[(Long, Long)]
   private[executor] val _fetchWaitTimeSource = new CollectionAccumulator[(Long, Long)]
-  private[executor] val _recordProcessTimeHistogram = new CollectionAccumulator[(Long, Long)]
+  private[executor] val _recordProcessTimeHistogram = new RecordProcessTimeHistogramAccumulator
   private[executor] val _remoteReqsDurationByExecutor =
     new CollectionAccumulator[(String, Long)]
 
@@ -188,9 +189,7 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
     _fetchWaitTimeSource.value.asScala.groupMapReduce(_._1)(_._2)(_ + _).toMap
   }
 
-  def recordProcessTimeHistogram: Map[Long, Long] = {
-    _recordProcessTimeHistogram.value.asScala.groupMapReduce(_._1)(_._2)(_ + _).toMap
-  }
+  def recordProcessTimeHistogram: Map[Long, Long] = _recordProcessTimeHistogram.value
 
   /**
    * Map of executor IDs to the total time taken for remote requests to that executor.
@@ -347,6 +346,47 @@ class ShuffleReadMetrics private[spark] () extends Serializable {
  * shuffle dependency, and all temporary metrics will be merged into the [[ShuffleReadMetrics]] at
  * last.
  */
+/**
+ * The record process time histogram: (bucket, count) pairs, merged per bucket. Unlike a
+ * [[CollectionAccumulator]], whose list grows with every task merged into it, its size is
+ * bounded by the number of buckets, which matters as the DAG scheduler copies the value of the
+ * stage's accumulator into the task info of every task that ends.
+ */
+private[spark] class RecordProcessTimeHistogramAccumulator
+  extends AccumulatorV2[(Long, Long), Map[Long, Long]] {
+  private val buckets = mutable.HashMap.empty[Long, Long]
+
+  override def isZero: Boolean = this.synchronized(buckets.isEmpty)
+
+  override def copyAndReset(): RecordProcessTimeHistogramAccumulator =
+    new RecordProcessTimeHistogramAccumulator
+
+  override def copy(): RecordProcessTimeHistogramAccumulator = {
+    val newAcc = new RecordProcessTimeHistogramAccumulator
+    newAcc.setValue(value)
+    newAcc
+  }
+
+  override def reset(): Unit = this.synchronized(buckets.clear())
+
+  override def add(v: (Long, Long)): Unit = this.synchronized {
+    buckets(v._1) = buckets.getOrElse(v._1, 0L) + v._2
+  }
+
+  override def merge(other: AccumulatorV2[(Long, Long), Map[Long, Long]]): Unit = other match {
+    case o: RecordProcessTimeHistogramAccumulator => o.value.foreach(add)
+    case _ => throw new UnsupportedOperationException(
+      s"Cannot merge ${this.getClass.getName} with ${other.getClass.getName}")
+  }
+
+  override def value: Map[Long, Long] = this.synchronized(buckets.toMap)
+
+  private[spark] def setValue(newValue: Map[Long, Long]): Unit = this.synchronized {
+    buckets.clear()
+    buckets ++= newValue
+  }
+}
+
 private[spark] class TempShuffleReadMetrics extends ShuffleReadMetricsReporter {
   private[this] var _remoteBlocksFetched = 0L
   private[this] var _localBlocksFetched = 0L

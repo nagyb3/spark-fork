@@ -93,9 +93,8 @@ private[protobuf] class TaskDataWrapperSerializer extends ProtobufSerDe[TaskData
     input.fetchWaitTimeSource.foreach { case (taskId, waitTime) =>
       builder.putFetchWaitTimeSource(taskId, waitTime)
     }
-    input.recordProcessTimeHistogram.foreach { case (bucket, count) =>
-      builder.putRecordProcessTimeHistogram(bucket, count)
-    }
+    builder.setRecordProcessTimeSamples(input.recordProcessTimeSamples)
+    input.recordProcessTimeNanosPercentiles.foreach(builder.addRecordProcessTimeNanosPercentiles)
     input.remoteReqsDurationByExecutor.foreach { case (executorId, duration) =>
       builder.putRemoteReqsDurationByExecutor(executorId, duration)
     }
@@ -169,10 +168,9 @@ private[protobuf] class TaskDataWrapperSerializer extends ProtobufSerDe[TaskData
         (Map.empty[Long, Long] ++ binary.getFetchWaitTimeSourceMap.asScala.map {
           case (k, v) => (k.longValue(), v.longValue())
         }),
-      recordProcessTimeHistogram =
-        (Map.empty[Long, Long] ++ binary.getRecordProcessTimeHistogramMap.asScala.map {
-          case (k, v) => (k.longValue(), v.longValue())
-        }),
+      recordProcessTimeSamples = binary.getRecordProcessTimeSamples,
+      recordProcessTimeNanosPercentiles =
+        binary.getRecordProcessTimeNanosPercentilesList.asScala.map(_.longValue()).toSeq,
       remoteReqsDurationByExecutor =
         (Map.empty[String, Long] ++ binary.getRemoteReqsDurationByExecutorMap.asScala.map {
           case (k, v) => (k, v.longValue())

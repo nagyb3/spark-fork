@@ -28,6 +28,7 @@ import org.apache.spark.JobExecutionStatus
 import org.apache.spark.executor.{ExecutorMetrics, TaskMetrics}
 import org.apache.spark.resource.{ExecutorResourceRequest, ResourceInformation, ResourceProfile, TaskResourceRequest}
 import org.apache.spark.scheduler.{AccumulableInfo, StageInfo, TaskInfo}
+import org.apache.spark.shuffle.RecordProcessTimeHistogram
 import org.apache.spark.status.api.v1
 import org.apache.spark.storage.{RDDInfo, StorageLevel}
 import org.apache.spark.ui.SparkUI
@@ -216,6 +217,11 @@ private class LiveTask(
       metrics
     }
 
+    // The REST API only reports the number of samples and percentiles per task, so they are
+    // computed once here rather than keeping the task's histogram.
+    val (recordProcessTimeSamples, recordProcessTimeNanosPercentiles) =
+      RecordProcessTimeHistogram.summarize(metrics.shuffleReadMetrics.recordProcessTimeHistogram)
+
     new TaskDataWrapper(
       info.taskId,
       info.index,
@@ -269,7 +275,8 @@ private class LiveTask(
       taskMetrics.shuffleReadMetrics.blocksFetchedSource,
       taskMetrics.shuffleReadMetrics.recordsReadSource,
       taskMetrics.shuffleReadMetrics.fetchWaitTimeSource,
-      taskMetrics.shuffleReadMetrics.recordProcessTimeHistogram,
+      recordProcessTimeSamples,
+      recordProcessTimeNanosPercentiles,
       taskMetrics.shuffleReadMetrics.remoteReqsDurationByExecutor,
       taskMetrics.shuffleWriteMetrics.bytesWritten,
       taskMetrics.shuffleWriteMetrics.writeTime,

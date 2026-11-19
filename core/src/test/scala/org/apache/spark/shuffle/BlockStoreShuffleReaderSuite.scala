@@ -63,9 +63,19 @@ class BlockStoreShuffleReaderSuite extends SparkFunSuite with LocalSparkContext 
    * This test makes sure that, when data is read from a HashShuffleReader, the underlying
    * ManagedBuffers that contain the data are eventually released.
    */
-  test("read() releases resources on completion") {
+  Seq((true, 1), (true, 0), (false, 1)).foreach { case (recordProcessTimeEnabled, interval) =>
+    test("read() releases resources on completion " +
+        s"(recordProcessTime.enabled=$recordProcessTimeEnabled, sampleInterval=$interval)") {
+      testReadReleasesResources(recordProcessTimeEnabled, interval)
+    }
+  }
+
+  private def testReadReleasesResources(
+      recordProcessTimeEnabled: Boolean,
+      sampleInterval: Int): Unit = {
     val testConf = new SparkConf(false)
-      .set(config.SHUFFLE_RECORD_PROCESS_TIME_SAMPLE_INTERVAL, 1)
+      .set(config.SHUFFLE_RECORD_PROCESS_TIME_ENABLED, recordProcessTimeEnabled)
+      .set(config.SHUFFLE_RECORD_PROCESS_TIME_SAMPLE_INTERVAL, sampleInterval)
     // Create a SparkContext as a convenient way of setting SparkEnv (needed because some of the
     // shuffle code calls SparkEnv.get()).
     sc = new SparkContext("local", "test", testConf)
@@ -164,10 +174,20 @@ class BlockStoreShuffleReaderSuite extends SparkFunSuite with LocalSparkContext 
     // Every record is attributed to the map task whose block it was read from.
     assert(metrics.recordsReadSource ===
       (0 until numMaps).map(_.toLong -> keyValuePairsPerMap.toLong).toMap)
-    val numRecords = keyValuePairsPerMap * numMaps
-    assert(metrics.recordsProcessTime === numRecords * recordProcessTimeMs)
-    val recordProcessTimeBucket =
-      RecordProcessTimeHistogram.bucket(TimeUnit.MILLISECONDS.toNanos(recordProcessTimeMs))
-    assert(metrics.recordProcessTimeHistogram === Map(recordProcessTimeBucket -> numRecords.toLong))
+    if (recordProcessTimeEnabled) {
+      val numRecords = keyValuePairsPerMap * numMaps
+      assert(metrics.recordsProcessTime === numRecords * recordProcessTimeMs)
+      if (sampleInterval > 0) {
+        val recordProcessTimeBucket =
+          RecordProcessTimeHistogram.bucket(TimeUnit.MILLISECONDS.toNanos(recordProcessTimeMs))
+        assert(metrics.recordProcessTimeHistogram ===
+          Map(recordProcessTimeBucket -> numRecords.toLong))
+      } else {
+        assert(metrics.recordProcessTimeHistogram.isEmpty)
+      }
+    } else {
+      assert(metrics.recordsProcessTime === 0L)
+      assert(metrics.recordProcessTimeHistogram.isEmpty)
+    }
   }
 }

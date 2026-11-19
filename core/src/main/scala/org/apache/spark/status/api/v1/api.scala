@@ -424,7 +424,8 @@ class ShuffleReadMetrics private[spark](
     val recordProcessTimeHistogram: Map[Long, Long],
     @JsonDeserialize(contentAs = classOf[JLong])
     val remoteReqsDurationByExecutor: Map[String, Long],
-    sourceMetrics0: Map[Long, ShuffleSourceMetrics] = null) {
+    sourceMetrics0: Map[Long, ShuffleSourceMetrics] = null,
+    recordProcessTimeSummary0: (Long, Seq[Long]) = null) {
 
   @JsonProperty("sourceMetrics")
   val sourceMetrics: Map[Long, ShuffleSourceMetrics] =
@@ -432,14 +433,23 @@ class ShuffleReadMetrics private[spark](
     else ShuffleReadMetrics.buildSourceMetrics(
       shuffleSourceBytes, blocksFetchedSource, recordsReadSource, fetchWaitTimeSource)
 
+  /**
+   * The number of samples and the percentiles: precomputed for the tasks in the status store,
+   * which keep no histogram, and computed from the histogram otherwise (e.g. for stages).
+   */
+  private def recordProcessTimeSummary: (Long, Seq[Long]) =
+    if (recordProcessTimeSummary0 != null) recordProcessTimeSummary0
+    else RecordProcessTimeHistogram.summarize(recordProcessTimeHistogram)
+
   @JsonProperty("recordProcessTimeNanosPercentiles")
-  def recordProcessTimeNanosPercentiles: Option[RecordProcessTimePercentiles] =
-    RecordProcessTimeHistogram.percentiles(recordProcessTimeHistogram, Seq(0.5, 0.9, 0.99)).map {
-      nanos => new RecordProcessTimePercentiles(nanos(0), nanos(1), nanos(2))
-    }
+  def recordProcessTimeNanosPercentiles: Option[RecordProcessTimePercentiles] = {
+    val nanos = recordProcessTimeSummary._2
+    if (nanos.isEmpty) None
+    else Some(new RecordProcessTimePercentiles(nanos(0), nanos(1), nanos(2)))
+  }
 
   @JsonProperty("recordProcessTimeSamples")
-  def recordProcessTimeSamples: Long = recordProcessTimeHistogram.values.sum
+  def recordProcessTimeSamples: Long = recordProcessTimeSummary._1
 }
 
 object ShuffleReadMetrics {

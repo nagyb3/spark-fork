@@ -393,7 +393,7 @@ private[spark] object TaskMetrics extends Logging {
           .setValue(value.asInstanceOf[java.util.List[(Long, Long)]])
       } else if (name == shuffleRead.RECORD_PROCESS_TIME_HISTOGRAM) {
         tm.shuffleReadMetrics._recordProcessTimeHistogram
-          .setValue(value.asInstanceOf[java.util.List[(Long, Long)]])
+          .setValue(value.asInstanceOf[Map[Long, Long]])
       } else if (name == shuffleRead.REMOTE_REQS_DURATION_BY_EXECUTOR) {
         tm.shuffleReadMetrics._remoteReqsDurationByExecutor
           .setValue(value.asInstanceOf[java.util.List[(String, Long)]])

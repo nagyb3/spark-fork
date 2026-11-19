@@ -184,7 +184,8 @@ class KVStoreProtobufSerializerSuite extends SparkFunSuite {
         blocksFetchedSource = Map(137L -> 2L),
         recordsReadSource = Map(137L -> 20L),
         fetchWaitTimeSource = Map(137L -> 9L),
-        recordProcessTimeHistogram = Map(137L -> 15L),
+        recordProcessTimeSamples = 15L,
+        recordProcessTimeNanosPercentiles = Seq(1000L, 2000L, 3000L),
         remoteReqsDurationByExecutor = Map("exec-1" -> 12L),
         shuffleBytesWritten = 38L,
         shuffleWriteTime = 39L,
@@ -244,7 +245,8 @@ class KVStoreProtobufSerializerSuite extends SparkFunSuite {
       assert(result.blocksFetchedSource == input.blocksFetchedSource)
       assert(result.recordsReadSource == input.recordsReadSource)
       assert(result.fetchWaitTimeSource == input.fetchWaitTimeSource)
-      assert(result.recordProcessTimeHistogram == input.recordProcessTimeHistogram)
+      assert(result.recordProcessTimeSamples == input.recordProcessTimeSamples)
+      assert(result.recordProcessTimeNanosPercentiles == input.recordProcessTimeNanosPercentiles)
       assert(result.shuffleRecordsProcessTime == input.shuffleRecordsProcessTime)
       assert(result.remoteReqsDurationByExecutor == input.remoteReqsDurationByExecutor)
       assert(result.shuffleBytesWritten == input.shuffleBytesWritten)

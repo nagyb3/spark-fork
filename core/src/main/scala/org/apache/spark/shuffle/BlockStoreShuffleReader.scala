@@ -17,6 +17,7 @@
 
 package org.apache.spark.shuffle
 
+import java.io.InputStream
 import java.util.concurrent.TimeUnit
 
 import scala.collection
@@ -96,44 +97,100 @@ private[spark] class BlockStoreShuffleReader[K, C](
 
     val serializerInstance = dep.serializer.newInstance()
 
-    val recordProcessTimeSampler = new RecordProcessTimeSampler(
-      SparkEnv.get.conf.get(config.SHUFFLE_RECORD_PROCESS_TIME_SAMPLE_INTERVAL), clock, readMetrics)
-    var recordsProcessTimeNanos = 0L
-    var reportedRecordsProcessTimeMs = 0L
-
     // Records read from the current block are counted locally and reported per source task
     // once the block is done, so that the per-record path doesn't update a map.
+    var currentSourceTaskId: Option[Long] = None
     var currentSourceRecordsRead = 0L
+    def reportSourceRecordsRead(): Unit = {
+      if (currentSourceRecordsRead > 0) {
+        currentSourceTaskId.foreach(readMetrics.incRecordsReadSource(_, currentSourceRecordsRead))
+      }
+      currentSourceRecordsRead = 0L
+    }
 
     // Create a key/value iterator for each stream
-    val recordIter = wrappedStreams.flatMap { case (blockId, wrappedStream) =>
-      val sourceTaskId = ShuffleReadMetricsReporter.sourceTaskId(blockId)
-      val processStartTime = clock.nanoTime()
-      // Note: the asKeyValueIterator below wraps a key/value iterator inside of a
-      // NextIterator. The NextIterator makes sure that close() is called on the
-      // underlying InputStream when all records have been read.
-      val blockRecordIter = serializerInstance.deserializeStream(wrappedStream).asKeyValueIterator
-      CompletionIterator[(Any, Any), Iterator[(Any, Any)]](
-        recordProcessTimeSampler.wrap(blockRecordIter), {
-          if (currentSourceRecordsRead > 0) {
-            sourceTaskId.foreach(readMetrics.incRecordsReadSource(_, currentSourceRecordsRead))
-          }
-          currentSourceRecordsRead = 0L
-          recordsProcessTimeNanos += clock.nanoTime() - processStartTime
+    // Note: the asKeyValueIterator below wraps a key/value iterator inside of a
+    // NextIterator. The NextIterator makes sure that close() is called on the
+    // underlying InputStream when all records have been read.
+    val metricIter = if (SparkEnv.get.conf.get(config.SHUFFLE_RECORD_PROCESS_TIME_ENABLED)) {
+      val sampleInterval = SparkEnv.get.conf.get(config.SHUFFLE_RECORD_PROCESS_TIME_SAMPLE_INTERVAL)
+      val sampler =
+        if (sampleInterval > 0) new RecordProcessTimeSampler(sampleInterval, clock, readMetrics)
+        else null
+      var recordsProcessTimeNanos = 0L
+      var reportedRecordsProcessTimeMs = 0L
+      var blockStartTime = -1L
+      def finishBlock(): Unit = {
+        if (blockStartTime >= 0) {
+          val now = clock.nanoTime()
+          recordsProcessTimeNanos += now - blockStartTime
           val recordsProcessTimeMs = TimeUnit.NANOSECONDS.toMillis(recordsProcessTimeNanos)
           readMetrics.incRecordsProcessTime(recordsProcessTimeMs - reportedRecordsProcessTimeMs)
           reportedRecordsProcessTimeMs = recordsProcessTimeMs
+          if (sampler != null) {
+            sampler.blockFinished(now)
+          }
+          blockStartTime = -1L
+        }
+      }
+      // flatMap only asks for the next block once the current one is exhausted, and before
+      // waiting for the next block to be fetched: the end of the current block. Detecting it here
+      // costs nothing per record, unlike wrapping the iterator of every block.
+      val blocks = new Iterator[(BlockId, InputStream)] {
+        override def hasNext: Boolean = {
+          finishBlock()
+          wrappedStreams.hasNext
+        }
+        override def next(): (BlockId, InputStream) = wrappedStreams.next()
+      }
+      val recordIter = blocks.flatMap { case (blockId, wrappedStream) =>
+        // The previous block has been fully read once flatMap moves on to the next one.
+        reportSourceRecordsRead()
+        currentSourceTaskId = ShuffleReadMetricsReporter.sourceTaskId(blockId)
+        blockStartTime = clock.nanoTime()
+        serializerInstance.deserializeStream(wrappedStream).asKeyValueIterator
+      }
+      // Update the context task metrics for each record read.
+      val countedIter = if (sampler != null) {
+        recordIter.map { record =>
+          readMetrics.incRecordsRead(1)
+          currentSourceRecordsRead += 1
+          sampler.recordDelivered()
+          record
+        }
+      } else {
+        recordIter.map { record =>
+          readMetrics.incRecordsRead(1)
+          currentSourceRecordsRead += 1
+          record
+        }
+      }
+      CompletionIterator[(Any, Any), Iterator[(Any, Any)]](countedIter, {
+        finishBlock()
+        reportSourceRecordsRead()
+        context.taskMetrics().mergeShuffleReadMetrics()
+      })
+    } else {
+      // The same without the record process time measurement.
+      val recordIter = wrappedStreams.flatMap { case (blockId, wrappedStream) =>
+        // The previous block has been fully read once flatMap moves on to the next one.
+        reportSourceRecordsRead()
+        currentSourceTaskId = ShuffleReadMetricsReporter.sourceTaskId(blockId)
+        serializerInstance.deserializeStream(wrappedStream).asKeyValueIterator
+      }
+
+      // Update the context task metrics for each record read.
+      CompletionIterator[(Any, Any), Iterator[(Any, Any)]](
+        recordIter.map { record =>
+          readMetrics.incRecordsRead(1)
+          currentSourceRecordsRead += 1
+          record
+        },
+        {
+          reportSourceRecordsRead()
+          context.taskMetrics().mergeShuffleReadMetrics()
         })
     }
-
-    // Update the context task metrics for each record read.
-    val metricIter = CompletionIterator[(Any, Any), Iterator[(Any, Any)]](
-      recordIter.map { record =>
-        readMetrics.incRecordsRead(1)
-        currentSourceRecordsRead += 1
-        record
-      },
-      context.taskMetrics().mergeShuffleReadMetrics())
 
     // An interruptible iterator must be used here in order to support task cancellation
     val interruptibleIter = new InterruptibleIterator[(Any, Any)](context, metricIter)
